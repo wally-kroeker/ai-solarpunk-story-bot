@@ -1,0 +1,72 @@
+# Twitter Bot Configuration
+
+# API Configuration
+api:
+  google:
+    project_id: "your-project-id"
+    region: "us-central1"
+  twitter:
+    api_version: "2"
+    rate_limit:
+      max_requests: 50
+      time_window: 900  # 15 minutes in seconds
+
+# Story Generation
+story:
+  max_length: 280  # Twitter character limit
+  genres:
+    - fantasy
+    - sci-fi
+    - mystery
+    - humor
+    - romance
+  prompt_template: |
+    Generate a creative one-sentence story in the {genre} genre.
+    The story should be engaging and suitable for all audiences.
+    Include vivid imagery that can be translated into a visual.
+
+# Image Generation
+image:
+  size: "1024x1024"
+  style_presets:
+    - photorealistic
+    - watercolor
+    - digital_art
+    - pixel_art
+  prompt_template: |
+    Create a visually striking image based on this story: {story}
+    Style: {style}
+    The image should be suitable for social media and family-friendly.
+
+# Scheduling
+schedule:
+  posting_interval: 4  # hours
+  timezone: "UTC"
+  allowed_hours:
+    start: 8
+    end: 22
+  max_posts_per_day: 6
+
+# Logging
+logging:
+  level: "INFO"
+  file: "logs/bot.log"
+  max_size: 10485760  # 10MB
+  backup_count: 5
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Content Filtering
+content_filter:
+  enabled: true
+  inappropriate_words: []
+  max_retries: 3
+  cooldown_period: 300  # 5 minutes
+
+# Monitoring
+monitoring:
+  enabled: true
+  metrics_port: 9090
+  alert_thresholds:
+    error_rate: 0.1
+    api_latency: 5000  # ms
+    failed_posts: 3 
