@@ -2,9 +2,9 @@
 
 # API Configuration
 api:
-  google:
-    project_id: "your-project-id"
-    region: "us-central1"
+  google_cloud:
+    credentials_path: "credentials/gcp-credentials.json"
+    project_id: "twitterstoryagent"
   twitter:
     api_version: "2"
     rate_limit:

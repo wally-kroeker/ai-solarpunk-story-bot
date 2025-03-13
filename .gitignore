@@ -45,3 +45,9 @@ htmlcov/
 # OS specific
 .DS_Store
 Thumbs.db
+
+# Credentials and Secrets
+credentials/
+*.json
+*key*.json
+*secret*.json

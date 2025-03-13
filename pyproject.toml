@@ -6,7 +6,8 @@ authors = [
     { name = "Your Name", email = "your.email@example.com" }
 ]
 dependencies = [
-    "google-cloud-aiplatform>=1.36.0",
+    "google-cloud-aiplatform>=1.42.1",
+    "vertexai>=0.0.1",
     "tweepy>=4.14.0",
     "schedule>=1.2.0",
     "python-dotenv>=1.0.0",
