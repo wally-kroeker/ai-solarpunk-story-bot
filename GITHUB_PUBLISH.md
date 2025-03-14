@@ -27,10 +27,10 @@
 - [x] Add examples for config/config.yaml
 
 ## 5. Final Verification
-- [ ] Test the main `run.sh run-unified` command
-- [ ] Make sure the project runs with proper credentials
-- [ ] Check commit history for sensitive information
-- [ ] Create a final commit with updated documentation
+- [x] Test the main `run.sh run-unified` command
+- [x] Make sure the project runs with proper credentials
+- [x] Check commit history for sensitive information
+- [x] Create a final commit with updated documentation
 
 ## 6. GitHub Publication
 - [ ] Create new GitHub repository
