@@ -20,7 +20,7 @@ This bot combines several AI technologies to:
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/yourusername/ai-solarpunk-story-bot.git
+   git clone https://github.com/wally-kroeker/ai-solarpunk-story-bot.git
    cd ai-solarpunk-story-bot
    ```
 
@@ -48,7 +48,7 @@ This bot combines several AI technologies to:
 ### Twitter API
 1. Create a Twitter Developer account at [developer.twitter.com](https://developer.twitter.com/)
 2. Create a new Project and App
-3. Generate API key, API secret, access token, and access token secret
+3. Generate OAuth 2.0 credentials (client ID and client secret)
 4. Copy these credentials to a `.env` file (use `.env.template` as a guide)
 
 ### Google Cloud / Vertex AI
@@ -65,11 +65,12 @@ This bot combines several AI technologies to:
 1. **Environment Variables:**
    Copy `.env.template` to `.env` and fill in your Twitter API credentials:
    ```
-   TWITTER_API_KEY=your_api_key_here
-   TWITTER_API_SECRET=your_api_secret_here
-   TWITTER_ACCESS_TOKEN=your_access_token_here
-   TWITTER_ACCESS_TOKEN_SECRET=your_access_token_secret_here
+   TWITTER_CLIENT_ID=your_client_id_here
+   TWITTER_CLIENT_SECRET=your_client_secret_here
    TWITTER_BEARER_TOKEN=your_bearer_token_here
+   # If using user context
+   TWITTER_ACCESS_TOKEN=your_access_token_here
+   TWITTER_REFRESH_TOKEN=your_refresh_token_here
    ```
 
 2. **Configuration File:**
@@ -133,7 +134,7 @@ Creates AI-generated images that match the story themes using Imagen 2.
 Manages Twitter API integration for posting stories and images.
 
 **Features:**
-- OAuth 1.0a authentication
+- OAuth 2.0 authentication
 - Media upload capabilities
 - Rate limit handling
 - Tweet posting, deletion, and retrieval
@@ -147,7 +148,7 @@ A unified script that handles the complete generation and posting flow.
 - Generates a solarpunk micro-story
 - Uses AI to extract key visual elements from the story
 - Creates an optimized image prompt based on the story content
-- Generates a digital art image using the AI-derived prompt
+- Generates a digital art image based on the AI-derived prompt
 - Posts both the story and image to Twitter in one operation
 
 ## Usage
@@ -212,9 +213,9 @@ You can still use the individual components if needed:
 ## Troubleshooting
 
 ### Twitter API Issues
-- Ensure your API keys are correct and have the appropriate permissions
+- Ensure your OAuth 2.0 credentials are correct and have the appropriate permissions
 - Check if your Twitter developer account has proper access level
-- For 401 errors, regenerate your tokens
+- For token expiration, the bot should automatically refresh tokens
 - Rate limits: The bot includes retry mechanisms for rate limits
 
 ### Google Cloud API Issues
@@ -230,4 +231,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Gemini Pro by Google for AI story generation
 - Imagen 2 by Google for image generation
-- Tweepy and requests_oauthlib for Twitter API integration
+- python-twitter for Twitter API integration
