@@ -1,7 +1,7 @@
 [project]
 name = "ai-story-twitter-bot"
 version = "0.1.0"
-description = "An AI-powered Twitter bot that generates and posts creative one-sentence stories with accompanying AI-generated images"
+description = "An AI-powered Twitter bot that generates and posts solarpunk micro-stories with accompanying AI-generated images"
 authors = [
     { name = "Your Name", email = "your.email@example.com" }
 ]
@@ -9,6 +9,7 @@ dependencies = [
     "google-cloud-aiplatform>=1.42.1",
     "vertexai>=0.0.1",
     "tweepy>=4.14.0",
+    "requests-oauthlib>=1.3.1",
     "schedule>=1.2.0",
     "python-dotenv>=1.0.0",
     "Pillow>=10.0.0",

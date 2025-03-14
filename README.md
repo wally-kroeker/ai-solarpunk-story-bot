@@ -16,6 +16,18 @@ This bot combines several AI technologies to:
 - Google Cloud Platform account with Vertex AI (Gemini Pro and Imagen) enabled
 - Service account credentials for Google Cloud
 
+## Prerequisites
+- Twitter Developer Account (Elevated access required)
+- Google Cloud account with Gemini Pro and Imagen API access
+- Approximately 250 API calls per month (for daily posts)
+
+## Quick Start
+1. Clone the repository
+2. Run `uv venv && source .venv/bin/activate`
+3. Run `uv pip install -e .`
+4. Copy `.env.template` to `.env` and add your API keys
+5. Run `./run.sh run-unified random` to generate and post your first story
+
 ## Installation
 
 1. **Clone the repository:**
@@ -48,7 +60,7 @@ This bot combines several AI technologies to:
 ### Twitter API
 1. Create a Twitter Developer account at [developer.twitter.com](https://developer.twitter.com/)
 2. Create a new Project and App
-3. Generate OAuth 2.0 credentials (client ID and client secret)
+3. Generate API keys, API secrets, access token, and access token secret
 4. Copy these credentials to a `.env` file (use `.env.template` as a guide)
 
 ### Google Cloud / Vertex AI
@@ -65,12 +77,11 @@ This bot combines several AI technologies to:
 1. **Environment Variables:**
    Copy `.env.template` to `.env` and fill in your Twitter API credentials:
    ```
-   TWITTER_CLIENT_ID=your_client_id_here
-   TWITTER_CLIENT_SECRET=your_client_secret_here
-   TWITTER_BEARER_TOKEN=your_bearer_token_here
-   # If using user context
+   TWITTER_API_KEY=your_api_key_here
+   TWITTER_API_SECRET=your_api_secret_here
    TWITTER_ACCESS_TOKEN=your_access_token_here
-   TWITTER_REFRESH_TOKEN=your_refresh_token_here
+   TWITTER_ACCESS_TOKEN_SECRET=your_access_token_secret_here
+   TWITTER_BEARER_TOKEN=your_bearer_token_here
    ```
 
 2. **Configuration File:**
@@ -112,13 +123,15 @@ This bot combines several AI technologies to:
 
 ## Core Modules
 
+The bot consists of four main Python modules that work together:
+
 ### `src/story_generator.py`
-Generates solarpunk micro-stories based on various environmental settings (urban, coastal, forest, desert, rural).
+The primary story generation module that creates solarpunk micro-stories based on different environmental settings.
 
 **Features:**
 - Multiple environment settings with tailored prompts
 - Character-focused narrative generation
-- Adjustable story length and complexity
+- X/Twitter character limit compliance (280 characters)
 - Comprehensive error handling and retries
 
 ### `src/image_generator.py`
@@ -134,7 +147,7 @@ Creates AI-generated images that match the story themes using Imagen 2.
 Manages Twitter API integration for posting stories and images.
 
 **Features:**
-- OAuth 2.0 authentication
+- Twitter API v2 integration using Tweepy and OAuth1
 - Media upload capabilities
 - Rate limit handling
 - Tweet posting, deletion, and retrieval
@@ -145,11 +158,11 @@ A unified script that handles the complete generation and posting flow.
 
 **Features:**
 - Randomly selects a setting for each story
-- Generates a solarpunk micro-story
+- Generates a solarpunk micro-story using `story_generator.py`
 - Uses AI to extract key visual elements from the story
 - Creates an optimized image prompt based on the story content
-- Generates a digital art image based on the AI-derived prompt
-- Posts both the story and image to Twitter in one operation
+- Generates a digital art image based on the AI-derived prompt using `image_generator.py`
+- Posts both the story and image to Twitter using `twitter_client.py`
 
 ## Usage
 
@@ -172,6 +185,29 @@ Example:
 ```bash
 ./run.sh run-unified coastal
 ```
+
+### Generating a Complete Post
+
+To create a new post with both a story and an image, run:
+
+```bash
+./run.sh run-unified random
+```
+
+This orchestrates the full process:
+1. Generates a solarpunk micro-story with a random setting
+2. Extracts key visual elements from the story text
+3. Creates an image from those elements using digital art style
+4. Posts both the story and image to Twitter
+
+You can specify a setting instead of "random":
+```bash
+./run.sh run-unified urban     # Urban setting
+./run.sh run-unified coastal   # Coastal setting 
+./run.sh run-unified forest    # Forest setting
+```
+
+The process takes around 1-2 minutes to complete, primarily due to image generation time.
 
 ### Scheduling Automated Posts
 
@@ -210,12 +246,18 @@ You can still use the individual components if needed:
 - digital-art (digital art illustration style)
 - watercolor (watercolor painting style)
 
+## Example Output
+
+![Example Tweet](https://pbs.twimg.com/media/1900570946718625793.jpg)
+
+*Example tweet: "Salt air, tinged with blooming kelp, filled Maya's lungs. The community aquaponics system, usually humming with AI efficiency, had gone quiet. "Power fluctuation," the AI chirped, "rerouting solar now." Lights flickered, then steadied."*
+
 ## Troubleshooting
 
 ### Twitter API Issues
-- Ensure your OAuth 2.0 credentials are correct and have the appropriate permissions
+- Ensure your API keys are correct and have the appropriate permissions
 - Check if your Twitter developer account has proper access level
-- For token expiration, the bot should automatically refresh tokens
+- For 401 errors, regenerate your tokens
 - Rate limits: The bot includes retry mechanisms for rate limits
 
 ### Google Cloud API Issues
@@ -231,4 +273,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Gemini Pro by Google for AI story generation
 - Imagen 2 by Google for image generation
-- python-twitter for Twitter API integration
+- Tweepy and requests-oauthlib for Twitter API integration
+
+
+
