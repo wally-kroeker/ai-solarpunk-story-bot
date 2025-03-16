@@ -10,6 +10,52 @@ api:
     rate_limit:
       max_requests: 50
       time_window: 900  # 15 minutes in seconds
+  instagram:
+    api_version: "v18.0"
+    rate_limit:
+      max_requests: 200
+      time_window: 3600  # 1 hour in seconds
+    features:
+      - basic_display
+      - graph_api
+    permissions:
+      - instagram_basic
+      - pages_show_list
+      - instagram_content_publish
+      - instagram_manage_comments
+    media_types:
+      - image
+      - carousel
+      - story
+    image_requirements:
+      min_width: 1080
+      min_height: 1080
+      max_aspect_ratio: 1.91
+      supported_formats:
+        - jpeg
+        - png
+    caption:
+      max_length: 2200
+      hashtag_limit: 30
+      default_hashtags:
+        - solarpunk
+        - sustainable
+        - future
+    webhooks:
+      enabled: true
+      verify_token: "your_webhook_verify_token"
+      callback_url: "https://your-domain.com/webhook/instagram"
+    insights:
+      enabled: true
+      metrics:
+        - reach
+        - engagement
+        - impressions
+    moderation:
+      enabled: true
+      auto_moderate_comments: true
+      block_words: []
+      require_approval: false
 
 # Story Generation
 story:
@@ -22,7 +68,7 @@ story:
     - romance
   prompt_template: |
     Generate a creative one-sentence story in the {genre} genre.
-    The story should be engaging and suitable for all audiences.
+    The story should be engaging and positively show people there is a better way to live.
     Include vivid imagery that can be translated into a visual.
 
 # Image Generation
