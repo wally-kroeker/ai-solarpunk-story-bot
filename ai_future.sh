@@ -15,6 +15,10 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# Available settings and styles
+SETTINGS=("urban" "coastal" "forest" "desert" "rural" "mountain" "arctic" "island")
+STYLES=("photographic" "digital-art" "watercolor")
+
 # Function to display the script header
 show_header() {
     clear
@@ -30,18 +34,35 @@ show_header() {
     echo -e "${GREEN}Using UV package manager${NC}"
 }
 
-# Function to run the original run.sh with parameters
-run_original_script() {
-    ./run.sh "$@"
+# Function to run the generator with specified options
+run_generator() {
+    local setting=$1
+    local style=$2
+    local features=$3
+    local preview=$4
+    local extra_arg=$5
+    local extra_value=$6
+
+    local cmd="uv run src/ai_story_tweet_generator.py"
+    
+    # Add arguments if provided
+    [[ -n $setting ]] && cmd="$cmd --setting $setting"
+    [[ -n $style ]] && cmd="$cmd --style $style"
+    [[ -n $features ]] && cmd="$cmd --features $features"
+    [[ $preview == true ]] && cmd="$cmd --preview"
+    [[ -n $extra_arg ]] && cmd="$cmd $extra_arg $extra_value"
+
+    echo -e "${BLUE}Running command: $cmd${NC}"
+    eval $cmd
 }
 
 # Function to generate and post content
 generate_and_post() {
     echo -e "\n${GREEN}Story Generation and Posting${NC}"
-    echo -e "${YELLOW}1)${NC} Quick post (random setting, digital-art)"
-    echo -e "${YELLOW}2)${NC} Choose setting"
+    echo -e "${YELLOW}1)${NC} Quick post (random everything)"
+    echo -e "${YELLOW}2)${NC} Choose setting and style"
     echo -e "${YELLOW}3)${NC} Advanced options"
-    echo -e "${YELLOW}4)${NC} Preview without posting"
+    echo -e "${YELLOW}4)${NC} Preview mode"
     echo -e "${YELLOW}b)${NC} Back to main menu"
     echo -e "${YELLOW}q)${NC} Quit"
 
@@ -49,29 +70,40 @@ generate_and_post() {
 
     case $gen_choice in
         1)
-            run_original_script run-unified random
+            run_generator "random" "random" "story image post" false
             ;;
         2)
-            echo -e "\n${BLUE}Available settings:${NC}"
-            echo -e "${CYAN}1)${NC} Urban    - City-focused sustainable technology"
-            echo -e "${CYAN}2)${NC} Coastal  - Ocean and waterfront communities"
-            echo -e "${CYAN}3)${NC} Forest   - Woodland and natural integration"
-            echo -e "${CYAN}4)${NC} Desert   - Arid climate adaptation"
-            echo -e "${CYAN}5)${NC} Rural    - Sustainable agriculture"
-            read -p "Enter setting number: " setting_num
+            # Setting selection
+            echo -e "\n${BLUE}Choose Setting:${NC}"
+            for i in "${!SETTINGS[@]}"; do
+                echo -e "${CYAN}$((i+1)))${NC} ${SETTINGS[$i]}"
+            done
+            echo -e "${CYAN}$((${#SETTINGS[@]}+1)))${NC} random"
             
-            case $setting_num in
-                1) setting="urban" ;;
-                2) setting="coastal" ;;
-                3) setting="forest" ;;
-                4) setting="desert" ;;
-                5) setting="rural" ;;
-                *) 
-                    echo -e "${RED}Invalid setting, using random${NC}"
-                    setting="random"
-                    ;;
-            esac
-            run_original_script run-unified "$setting"
+            read -p "Select setting (1-$((${#SETTINGS[@]}+1))): " setting_num
+            
+            if [[ $setting_num -le ${#SETTINGS[@]} ]]; then
+                setting="${SETTINGS[$((setting_num-1))]}"
+            else
+                setting="random"
+            fi
+            
+            # Style selection
+            echo -e "\n${BLUE}Choose Style:${NC}"
+            for i in "${!STYLES[@]}"; do
+                echo -e "${CYAN}$((i+1)))${NC} ${STYLES[$i]}"
+            done
+            echo -e "${CYAN}$((${#STYLES[@]}+1)))${NC} random"
+            
+            read -p "Select style (1-$((${#STYLES[@]}+1))): " style_num
+            
+            if [[ $style_num -le ${#STYLES[@]} ]]; then
+                style="${STYLES[$((style_num-1))]}"
+            else
+                style="random"
+            fi
+            
+            run_generator "$setting" "$style" "story image post" false
             ;;
         3)
             advanced_generation
@@ -98,42 +130,87 @@ advanced_generation() {
     
     # Setting selection
     echo -e "\n${BLUE}Select setting:${NC}"
-    echo -e "${CYAN}1)${NC} Urban    - City-focused sustainable technology"
-    echo -e "${CYAN}2)${NC} Coastal  - Ocean and waterfront communities"
-    echo -e "${CYAN}3)${NC} Forest   - Woodland and natural integration"
-    echo -e "${CYAN}4)${NC} Desert   - Arid climate adaptation"
-    echo -e "${CYAN}5)${NC} Rural    - Sustainable agriculture"
-    echo -e "${CYAN}6)${NC} Random   - Let the AI choose"
-    read -p "Enter setting number [6]: " setting_num
-    case $setting_num in
-        1) setting="urban" ;;
-        2) setting="coastal" ;;
-        3) setting="forest" ;;
-        4) setting="desert" ;;
-        5) setting="rural" ;;
-        *) setting="random" ;;
-    esac
+    for i in "${!SETTINGS[@]}"; do
+        echo -e "${CYAN}$((i+1)))${NC} ${SETTINGS[$i]}"
+    done
+    echo -e "${CYAN}$((${#SETTINGS[@]}+1)))${NC} random"
+    
+    read -p "Enter setting number [$((${#SETTINGS[@]}+1))]: " setting_num
+    if [[ $setting_num -le ${#SETTINGS[@]} ]]; then
+        setting="${SETTINGS[$((setting_num-1))]}"
+    else
+        setting="random"
+    fi
 
     # Style selection
     echo -e "\n${BLUE}Select style:${NC}"
-    echo -e "${CYAN}1)${NC} Photographic - Realistic photography style"
-    echo -e "${CYAN}2)${NC} Digital-art  - Digital illustration style"
-    echo -e "${CYAN}3)${NC} Watercolor   - Artistic watercolor style"
-    read -p "Enter style number [2]: " style_num
-    case $style_num in
-        1) style="photographic" ;;
-        3) style="watercolor" ;;
-        *) style="digital-art" ;;
+    for i in "${!STYLES[@]}"; do
+        echo -e "${CYAN}$((i+1)))${NC} ${STYLES[$i]}"
+    done
+    echo -e "${CYAN}$((${#STYLES[@]}+1)))${NC} random"
+    
+    read -p "Enter style number [$((${#STYLES[@]}+1))]: " style_num
+    if [[ $style_num -le ${#STYLES[@]} ]]; then
+        style="${STYLES[$((style_num-1))]}"
+    else
+        style="random"
+    fi
+
+    # Feature selection
+    echo -e "\n${BLUE}Select features:${NC}"
+    echo -e "${CYAN}1)${NC} Story only"
+    echo -e "${CYAN}2)${NC} Story + Image"
+    echo -e "${CYAN}3)${NC} Complete (Story + Image + Post)"
+    
+    read -p "Enter feature set [3]: " feature_num
+    case $feature_num in
+        1) features="story" ;;
+        2) features="story image" ;;
+        *) features="story image post" ;;
     esac
 
-    run_original_script generate-and-post "$setting" "$style"
+    # Preview option
+    echo -e "\n${BLUE}Preview mode?${NC}"
+    read -p "Generate preview only (no posting) [y/N]: " preview_choice
+    preview=false
+    [[ $preview_choice =~ ^[Yy]$ ]] && preview=true
+
+    run_generator "$setting" "$style" "$features" "$preview"
 }
 
 # Function to preview generation without posting
 preview_generation() {
-    echo -e "\n${BLUE}Generating preview (will not post to Twitter)...${NC}"
-    # TODO: Implement preview functionality
-    echo -e "${YELLOW}Preview functionality coming soon!${NC}"
+    echo -e "\n${BLUE}Preview Generation${NC}"
+    
+    # Setting selection
+    echo -e "\n${BLUE}Select setting (or 'random'):${NC}"
+    for i in "${!SETTINGS[@]}"; do
+        echo -e "${CYAN}$((i+1)))${NC} ${SETTINGS[$i]}"
+    done
+    echo -e "${CYAN}$((${#SETTINGS[@]}+1)))${NC} random"
+    
+    read -p "Enter setting number [$((${#SETTINGS[@]}+1))]: " setting_num
+    if [[ $setting_num -le ${#SETTINGS[@]} ]]; then
+        setting="${SETTINGS[$((setting_num-1))]}"
+    else
+        setting="random"
+    fi
+
+    # Style selection
+    echo -e "\n${BLUE}Select style (or 'random'):${NC}"
+    for i in "${!STYLES[@]}"; do
+        echo -e "${CYAN}$((i+1)))${NC} ${STYLES[$i]}"
+    done
+    echo -e "${CYAN}$((${#STYLES[@]}+1)))${NC} random"
+    
+    read -p "Enter style number [$((${#STYLES[@]}+1))]: " style_num
+    if [[ $style_num -le ${#STYLES[@]} ]]; then
+        style="${STYLES[$((style_num-1))]}"
+    else
+        style="random"
+    fi
+
+    run_generator "$setting" "$style" "story image" true
 }
 
 # Function to manage scheduling
@@ -151,21 +228,23 @@ manage_scheduling() {
     case $schedule_choice in
         1)
             read -p "Enter time (HH:MM): " time
-            run_original_script schedule daily "$time"
+            (crontab -l 2>/dev/null; echo "$time * * * * cd $(pwd) && ./ai_future.sh generate random") | crontab -
+            echo -e "${GREEN}Daily schedule set for $time${NC}"
             ;;
         2)
             read -p "Enter time (HH:MM): " time
-            run_original_script schedule weekly "$time"
+            (crontab -l 2>/dev/null; echo "$time * * */7 * cd $(pwd) && ./ai_future.sh generate random") | crontab -
+            echo -e "${GREEN}Weekly schedule set for $time${NC}"
             ;;
         3)
             echo -e "${BLUE}Current schedule:${NC}"
-            crontab -l
+            crontab -l | grep "ai_future.sh" || echo "No schedules found"
             ;;
         4)
             echo -e "${RED}WARNING: This will remove all scheduled tasks!${NC}"
             read -p "Are you sure? (yes/no): " confirm
             if [ "$confirm" = "yes" ]; then
-                crontab -r
+                crontab -l | grep -v "ai_future.sh" | crontab -
                 echo -e "${GREEN}All schedules removed${NC}"
             fi
             ;;
@@ -182,13 +261,36 @@ manage_scheduling() {
     esac
 }
 
+# Function to post a preview
+post_preview() {
+    local preview_file=$1
+    
+    if [ ! -f "$preview_file" ]; then
+        echo -e "${RED}Preview file not found: $preview_file${NC}"
+        return 1
+    }
+    
+    echo -e "${BLUE}Preview content:${NC}"
+    cat "$preview_file"
+    
+    echo -e "\n${YELLOW}Would you like to post this content to Twitter? [y/N]:${NC}"
+    read -p "" post_choice
+    
+    if [[ $post_choice =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}Posting preview content...${NC}"
+        run_generator "" "" "" false "--post-preview" "$preview_file"
+    else
+        echo -e "${YELLOW}Posting cancelled${NC}"
+    fi
+}
+
 # Function to view recent activity
 view_recent_activity() {
     echo -e "\n${GREEN}Recent Activity${NC}"
     echo -e "${YELLOW}1)${NC} View recent posts"
     echo -e "${YELLOW}2)${NC} View recent images"
-    echo -e "${YELLOW}3)${NC} View logs"
-    echo -e "${YELLOW}4)${NC} View statistics"
+    echo -e "${YELLOW}3)${NC} View recent previews"
+    echo -e "${YELLOW}4)${NC} View logs"
     echo -e "${YELLOW}b)${NC} Back to main menu"
     echo -e "${YELLOW}q)${NC} Quit"
 
@@ -197,18 +299,38 @@ view_recent_activity() {
     case $activity_choice in
         1)
             echo -e "${BLUE}Recent posts:${NC}"
-            ls -lt output/twitter_tests/ | head -n 5
+            ls -lt output/stories/ | head -n 5
             ;;
         2)
             echo -e "${BLUE}Recent images:${NC}"
             ls -lt output/images/ | head -n 5
             ;;
         3)
-            echo -e "${BLUE}Recent logs:${NC}"
-            ls -lt logs/ | head -n 5
+            echo -e "${BLUE}Recent previews:${NC}"
+            ls -lt output/previews/ | head -n 5
+            read -p "View a preview? (enter number or 'n'): " preview_num
+            if [[ $preview_num =~ ^[0-9]+$ ]]; then
+                preview_file=$(ls -t output/previews/ | sed -n "${preview_num}p")
+                if [ -n "$preview_file" ]; then
+                    preview_path="output/previews/$preview_file"
+                    cat "$preview_path"
+                    
+                    # Check if already posted
+                    if grep -q '"posted": true' "$preview_path"; then
+                        echo -e "\n${YELLOW}This preview has already been posted${NC}"
+                    else
+                        echo -e "\n${BLUE}Would you like to post this preview? [y/N]:${NC}"
+                        read -p "" post_choice
+                        if [[ $post_choice =~ ^[Yy]$ ]]; then
+                            post_preview "$preview_path"
+                        fi
+                    fi
+                fi
+            fi
             ;;
         4)
-            show_statistics
+            echo -e "${BLUE}Recent logs:${NC}"
+            ls -lt logs/ | head -n 5
             ;;
         b|B)
             return
@@ -223,21 +345,14 @@ view_recent_activity() {
     esac
 }
 
-# Function to show statistics
-show_statistics() {
-    echo -e "\n${BLUE}System Statistics${NC}"
-    echo -e "${CYAN}Total posts:${NC} $(ls -1 output/twitter_tests/ | wc -l)"
-    echo -e "${CYAN}Total images:${NC} $(ls -1 output/images/ | wc -l)"
-    echo -e "${CYAN}Disk usage:${NC} $(du -sh output/)"
-}
-
 # Main menu function
 show_menu() {
     echo -e "\n${GREEN}Select an action:${NC}"
-    echo -e "${YELLOW}1)${NC} Generate and post story"
-    echo -e "${YELLOW}2)${NC} Manage scheduling"
-    echo -e "${YELLOW}3)${NC} View recent activity"
-    echo -e "${YELLOW}4)${NC} Check system status"
+    echo -e "${YELLOW}1)${NC} Generate content"
+    echo -e "${YELLOW}2)${NC} Preview generation"
+    echo -e "${YELLOW}3)${NC} Manage scheduling"
+    echo -e "${YELLOW}4)${NC} View recent activity"
+    echo -e "${YELLOW}5)${NC} Check system status"
     echo -e "${YELLOW}h)${NC} Show help"
     echo -e "${YELLOW}q)${NC} Quit"
 
@@ -248,12 +363,15 @@ show_menu() {
             generate_and_post
             ;;
         2)
-            manage_scheduling
+            preview_generation
             ;;
         3)
-            view_recent_activity
+            manage_scheduling
             ;;
         4)
+            view_recent_activity
+            ;;
+        5)
             check_system_status
             ;;
         h|H)
@@ -281,17 +399,20 @@ check_system_status() {
     fi
 
     # Check output directories
-    if [ -d "output/stories" ] && [ -d "output/images" ]; then
-        echo -e "${GREEN}✓${NC} Output directories exist"
-    else
-        echo -e "${RED}✗${NC} Output directories missing"
-    fi
+    for dir in "output/stories" "output/images" "output/previews"; do
+        if [ -d "$dir" ]; then
+            echo -e "${GREEN}✓${NC} $dir exists"
+            echo -e "   Files: $(ls -1 "$dir" | wc -l)"
+        else
+            echo -e "${RED}✗${NC} $dir missing"
+        fi
+    done
 
     # Check scheduled tasks
-    if crontab -l 2>/dev/null | grep -q "run.sh"; then
+    if crontab -l 2>/dev/null | grep -q "ai_future.sh"; then
         echo -e "${GREEN}✓${NC} Scheduled tasks found"
         echo -e "${BLUE}Current schedule:${NC}"
-        crontab -l | grep "run.sh"
+        crontab -l | grep "ai_future.sh"
     else
         echo -e "${YELLOW}!${NC} No scheduled tasks"
     fi
@@ -308,11 +429,15 @@ main() {
     # If command-line arguments were provided
     if [ $# -gt 0 ]; then
         case "$1" in
-            "generate"|"post")
-                run_original_script run-unified "${2:-random}"
+            "generate")
+                setting=${2:-"random"}
+                style=${3:-"random"}
+                run_generator "$setting" "$style" "story image post" false
                 ;;
-            "schedule")
-                run_original_script schedule "$2" "$3"
+            "preview")
+                setting=${2:-"random"}
+                style=${3:-"random"}
+                run_generator "$setting" "$style" "story image" true
                 ;;
             "status")
                 check_system_status
@@ -335,9 +460,6 @@ main() {
         show_header
     done
 }
-
-# Make the script executable
-chmod +x ai_future.sh
 
 # Run the script
 main "$@" 
