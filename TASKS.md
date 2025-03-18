@@ -150,8 +150,8 @@
         - Tested successfully
   - [x] Remove cron-specific components
         - Replaced with systemd timer
-        - Timer configured for daily runs at 09:00 UTC
-        - Added randomized delay for distributed load
+        - Timer configured for daily runs
+        - Removed randomized delay for exact timing
   - [x] Test service operation
         - Verified service execution
         - Confirmed story generation
@@ -163,9 +163,27 @@
         - Documented installation process
         - Added service status checking
 
-- [ ] Create configuration system for schedules
-  - [ ] Modify configuration to support systemd timer (if needed)
-  - [ ] Ensure environment variable loading works in service context
+- [x] Create configuration system for schedules
+  - [x] Create bot-manager.sh script for service management
+        - Added comprehensive timezone handling with DST support
+        - Implemented schedule management interface
+        - Added service status monitoring
+        - Created log viewing system
+  - [x] Add timezone-aware scheduling
+        - Implemented automatic DST detection
+        - Added timezone configuration system
+        - Created timezone conversion utilities
+        - Added clear timezone status display
+  - [x] Implement service controls
+        - Added manual service execution
+        - Created schedule modification interface
+        - Added service enable/disable functionality
+        - Implemented log viewing with proper permissions
+  - [x] Test and verify scheduling system
+        - Validated timezone conversions
+        - Tested schedule modifications
+        - Verified service operation
+        - Confirmed logging system works
 
 ## Phase 3: Testing and Quality Assurance
 
