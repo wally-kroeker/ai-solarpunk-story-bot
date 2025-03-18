@@ -9,7 +9,7 @@ alwaysApply: true
 ### Environment Awareness
 1. **WSL Environment Rule**
    - Always use bash shell commands as the environment is running in WSL
-   - Never use PowerShell commands
+   - Never use a PowerShell terminal
    - All terminal commands should be executed with `/bin/bash -c` if shell type is not explicitly specified
    - Remember that paths need to follow Linux conventions, not Windows
 

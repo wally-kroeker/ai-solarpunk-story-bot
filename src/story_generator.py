@@ -28,12 +28,24 @@ PROJECT_ROOT = Path(__file__).parent.parent
 
 @dataclass
 class StoryParameters:
-    """Parameters for story generation."""
+    """Parameters for story generation.
+    
+    Attributes:
+        max_chars: Maximum characters allowed in the story (default: X_FREE_CHAR_LIMIT)
+        themes: List of themes to incorporate (default: ["sustainability", "community", "technology"])
+        setting: Environmental setting for the story (default: "urban")
+        ai_role: How AI should be portrayed in the story (default: "supportive")
+        tone: Overall tone of the story (default: "hopeful")
+        community_focus: Type of community element to highlight (default: "shared resources")
+        character_diversity: Type of character diversity to emphasize (default: "age")
+    """
     max_chars: int = X_FREE_CHAR_LIMIT
     themes: List[str] = None
     setting: str = "urban"
     ai_role: str = "supportive"
     tone: str = "hopeful"
+    community_focus: str = "shared resources"
+    character_diversity: str = "age"
     
     def __post_init__(self) -> None:
         """Initialize default values for optional fields."""
@@ -106,111 +118,98 @@ class StoryGenerator:
         """Create a detailed prompt for solarpunk micro-story generation."""
         themes_text = ", ".join(params.themes)
         
+        # Calculate a safety margin to ensure complete sentences
+        char_limit = params.max_chars - 15  # Reserve 15 chars for completion
+        
         prompt = f"""
-        Create a very short solarpunk micro-story that fits in exactly {params.max_chars} characters or less.
+        Write a complete solarpunk micro-story under {char_limit} characters (maximum {params.max_chars}).
         
-        ABOUT SOLARPUNK:
-        Solarpunk envisions a future where humanity has successfully addressed climate change through sustainable
-        technology, community-focused solutions, and harmonious integration with nature.
+        MICROFICTION TECHNIQUES:
+        - Focus on a single powerful moment or image
+        - Use 1-2 characters maximum (not 3)
+        - Employ precise, evocative language where each word does multiple jobs
+        - Imply a larger world through specific details
+        - Create a complete arc in minimal space
         
-        SETTING:
-        The story takes place in a {params.setting} environment with green technology and community-focused design.
+        SOLARPUNK ELEMENTS:
+        - Set in a {params.setting} environment
+        - Subtly incorporate theme(s): {themes_text}
+        - Include technology that serves community needs
+        - Suggest harmony between nature and human design
+        - Integrate {params.ai_role} AI naturally into the backdrop
         
-        THEMES:
-        Incorporate these themes: {themes_text}
+        STYLE GUIDANCE:
+        - Use concrete sensory details rather than abstract concepts
+        - Show character connection through small gestures
+        - Let the setting imply the larger solarpunk world
+        - Trust the reader to infer themes from specific details
+        - Use a {params.tone} tone that feels authentic
         
-        AI ROLE:
-        Include AI as a {params.ai_role} element that enhances human life and environmental health.
+        EXAMPLES OF SUCCESSFUL MICROFICTION STRUCTURE:
+        1. Sensory detail → character reaction → implied meaning
+        2. Character action → environmental response → character realization
+        3. Environmental setting → character interaction → revealing detail
         
-        TONE:
-        The story should have a {params.tone} tone while remaining grounded and believable.
+        REMEMBER:
+        - Every word must earn its place
+        - Names should be short (1-2 syllables)
+        - Dialogue must be minimal and natural
+        - The story must have a complete ending
+        - Current character count is critical - stay under {char_limit}
         
-        STRUCTURE:
-        1. Begin with a vivid sensory detail of this solarpunk world
-        2. Introduce a small-scale, relatable situation
-        3. Show a moment of connection, innovation, or harmony
-        4. End with a sense of possibility and hope
-        
-        CRITICAL REQUIREMENTS:
-        - MUST be EXACTLY {params.max_chars} characters or less (this is a strict requirement for X/Twitter)
-        - Avoid dystopian elements or climate doom
-        - Focus on concrete, specific details rather than abstract concepts
-        - Make it feel like a complete moment despite the brevity
+        After drafting your story, count the characters and ensure it's complete and under the limit.
         """
         
         return prompt
     
-    def generate_story(
-        self, 
-        params: Optional[StoryParameters] = None
-    ) -> Tuple[str, Dict[str, Any]]:
+    def generate_story(self, params: StoryParameters) -> Tuple[str, Dict[str, Any]]:
         """Generate a solarpunk micro-story based on the provided parameters."""
-        if params is None:
-            params = StoryParameters()
-        
         # Create the prompt
         prompt = self._create_solarpunk_prompt(params)
         
-        # Configure generation parameters
-        generation_config = GenerationConfig(
-            temperature=0.7,
-            top_p=0.85,
-            top_k=40,
-            max_output_tokens=800,
-            candidate_count=1,
+        # Generate the story using the model
+        response = self.model.generate_content(
+            prompt,
+            generation_config={
+                "temperature": 0.7, 
+                "max_output_tokens": 512,
+                "top_k": 40,
+                "top_p": 0.95
+            }
         )
         
-        # Attempt to generate with retries
-        attempt = 0
-        last_error = None
+        story = response.text.strip()
         
-        while attempt < self.MAX_RETRIES:
-            try:
-                # Generate the story
-                response = self.model.generate_content(
-                    prompt, 
-                    generation_config=generation_config
-                )
-                
-                # Extract and clean the story
-                story_text = response.text.strip()
-                
-                # Ensure it fits within character limit
-                if len(story_text) > params.max_chars:
-                    # Try to truncate at the last sentence that fits
-                    last_period = story_text.rfind('.', 0, params.max_chars)
-                    if last_period > 0:
-                        story_text = story_text[:last_period + 1]
-                    else:
-                        # If no suitable truncation point, just cut at the limit
-                        story_text = story_text[:params.max_chars]
-                
-                # Build metadata about the generation
-                metadata = {
-                    "model": self.MODEL_NAME,
-                    "char_count": len(story_text),
-                    "themes": params.themes,
-                    "setting": params.setting,
-                    "ai_role": params.ai_role,
-                    "tone": params.tone,
-                    "timestamp": time.time(),
-                }
-                
-                logger.info(f"Successfully generated solarpunk story of {len(story_text)} characters")
-                return story_text, metadata
-            
-            except Exception as e:
-                attempt += 1
-                last_error = e
-                logger.warning(f"Story generation attempt {attempt}/{self.MAX_RETRIES} failed: {str(e)}")
-                
-                if attempt < self.MAX_RETRIES:
-                    time.sleep(self.RETRY_DELAY * attempt)  # Exponential backoff
+        # Ensure the story meets the character limit and ends with a complete sentence
+        if len(story) > params.max_chars:
+            # Find the last complete sentence that fits within the limit
+            last_period_index = story[:params.max_chars].rfind('.')
+            if last_period_index > 0:
+                story = story[:last_period_index + 1]
+            else:
+                # Try other sentence-ending punctuation
+                for punct in ['!', '?']:
+                    last_punct_index = story[:params.max_chars].rfind(punct)
+                    if last_punct_index > 0:
+                        story = story[:last_punct_index + 1]
+                        break
+                else:
+                    # If no sentence-ending punctuation found, just truncate
+                    story = story[:params.max_chars]
         
-        # If we get here, all retries failed
-        error_msg = f"Failed to generate story after {self.MAX_RETRIES} attempts. Last error: {str(last_error)}"
-        logger.error(error_msg)
-        raise Exception(error_msg)
+        # Create metadata
+        metadata = {
+            "setting": params.setting,
+            "themes": params.themes,
+            "ai_role": params.ai_role,
+            "tone": params.tone,
+            "community_focus": params.community_focus,
+            "character_diversity": params.character_diversity,
+            "char_count": len(story),
+            "timestamp": int(time.time())
+        }
+        
+        return story, metadata
 
 
 def generate_test_stories() -> None:

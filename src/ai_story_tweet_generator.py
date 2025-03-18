@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 # Available options
 SETTINGS = ["urban", "coastal", "forest", "desert", "rural", "mountain", "arctic", "island"]
-STYLES = ["photographic", "digital-art", "watercolor"]
+STYLES = ["digital-art", "watercolor", "stylized", "solarpunk-nouveau", "retro-futurism", "isometric"]
 FEATURES = ["story", "image", "post"]  # Can be combined
 
 # Project root directory for saving files
@@ -62,7 +62,7 @@ def select_random_style() -> str:
     """Randomly select an image style from the available options."""
     return random.choice(STYLES)
 
-def generate_story(setting: str) -> Tuple[str, Dict[str, Any]]:
+def generate_story(setting: str, output_dir: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:
     """Generate a solarpunk micro-story with the given setting."""
     logger.info(f"Generating story with setting: {setting}")
     
@@ -78,7 +78,10 @@ def generate_story(setting: str) -> Tuple[str, Dict[str, Any]]:
         
         # Save the story to a file
         timestamp = int(time.time())
-        story_file = STORIES_DIR / f"story_{setting}_{timestamp}.txt"
+        if output_dir:
+            story_file = Path(output_dir) / f"story_{setting}_{timestamp}.txt"
+        else:
+            story_file = STORIES_DIR / f"story_{setting}_{timestamp}.txt"
         with open(story_file, 'w') as f:
             f.write(story)
         
@@ -140,7 +143,7 @@ def extract_image_prompt(story: str) -> str:
         logger.info(f"Using fallback prompt: {fallback_prompt}")
         return fallback_prompt
 
-def generate_image(story: str, setting: str, style: str, image_prompt: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:
+def generate_image(story: str, setting: str, style: str, image_prompt: Optional[str] = None, output_dir: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:
     """Generate an image based on the story and optional image prompt."""
     logger.info(f"Generating image with setting: {setting}, style: {style}")
     
@@ -153,7 +156,10 @@ def generate_image(story: str, setting: str, style: str, image_prompt: Optional[
         
         # Prepare a save path
         timestamp = int(time.time())
-        save_path = str(IMAGES_DIR / f"image_{setting}_{style}_{timestamp}.png")
+        if output_dir:
+            image_file = Path(output_dir) / f"image_{setting}_{style}_{timestamp}.png"
+        else:
+            image_file = IMAGES_DIR / f"image_{setting}_{style}_{timestamp}.png"
         
         # Use the provided prompt or the story directly
         prompt = image_prompt if image_prompt else story
@@ -163,11 +169,11 @@ def generate_image(story: str, setting: str, style: str, image_prompt: Optional[
             prompt,
             setting,
             params,
-            save_path=save_path
+            save_path=str(image_file)
         )
         
-        logger.info(f"Image generated and saved to {save_path}")
-        return save_path, metadata
+        logger.info(f"Image generated and saved to {image_file}")
+        return str(image_file), metadata
     except Exception as e:
         logger.error(f"Error generating image: {e}")
         raise
@@ -216,7 +222,8 @@ def run_generation(
     setting: Optional[str] = None,
     style: Optional[str] = None,
     features: Optional[List[str]] = None,
-    preview_only: bool = False
+    preview_only: bool = False,
+    output_dir: Optional[str] = None
 ) -> GenerationResult:
     """Run the complete or partial generation flow based on specified features."""
     try:
@@ -236,7 +243,7 @@ def run_generation(
         
         # 2. Generate story if requested
         if "story" in features:
-            story, story_metadata = generate_story(setting)
+            story, story_metadata = generate_story(setting, output_dir)
             result = result._replace(
                 story=story,
                 story_metadata=story_metadata
@@ -252,7 +259,8 @@ def run_generation(
                 result.story,
                 setting,
                 style,
-                image_prompt
+                image_prompt,
+                output_dir
             )
             result = result._replace(
                 image_path=image_path,
@@ -346,6 +354,16 @@ def main():
         type=str,
         help="Post content from a preview file"
     )
+    parser.add_argument(
+        "--post-files",
+        type=str,
+        help="Post from specific story and image files (format: story_path:image_path)"
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        help="Custom output directory for generated files"
+    )
     
     args = parser.parse_args()
     
@@ -353,11 +371,29 @@ def main():
         success = post_from_preview(args.post_preview)
         return 0 if success else 1
     
+    if args.post_files:
+        try:
+            story_path, image_path = args.post_files.split(':')
+            with open(story_path, 'r') as f:
+                story = f.read().strip()
+            
+            if os.path.exists(image_path):
+                tweet_id = post_to_twitter(story, image_path)
+                logger.info(f"Successfully posted from files, tweet ID: {tweet_id}")
+                return 0
+            else:
+                logger.error(f"Image file not found: {image_path}")
+                return 1
+        except Exception as e:
+            logger.error(f"Error posting from files: {e}")
+            return 1
+    
     result = run_generation(
         setting=args.setting,
         style=args.style,
         features=args.features,
-        preview_only=args.preview
+        preview_only=args.preview,
+        output_dir=args.output_dir
     )
     
     if result.success:

@@ -64,7 +64,7 @@ class ImageParameters:
     """Parameters for image generation."""
     model_name: str = "imagen-3.0-generate-002"
     samples: int = 1
-    style: str = "photographic"
+    style: str = "digital-art"
     add_watermark: bool = True
     
     def __post_init__(self) -> None:
@@ -79,9 +79,9 @@ class ImageParameters:
             self.samples = 1
         
         # Validate style
-        valid_styles = ["photographic", "digital-art", "watercolor", "anime", "pixel-art"]
+        valid_styles = ["digital-art", "watercolor", "stylized", "solarpunk-nouveau", "retro-futurism", "isometric"]
         if self.style not in valid_styles:
-            self.style = "photographic"
+            self.style = "digital-art"
 
 
 class ImageGenerator:
@@ -93,11 +93,12 @@ class ImageGenerator:
     
     # Solarpunk style descriptors to enhance prompts
     STYLE_ENHANCERS = {
-        "photographic": "Photorealistic solarpunk scene with vibrant colors, natural lighting, rich details",
-        "digital-art": "Detailed digital art in solarpunk style with vibrant colors and sleek design",
-        "watercolor": "Dreamy watercolor solarpunk scene with soft colors and flowing brushstrokes",
-        "anime": "Anime-style solarpunk scene with expressive characters and bright details",
-        "pixel-art": "Detailed pixel art solarpunk scene with vibrant colors and retro aesthetic"
+        "digital-art": "digital art, vibrant colors, detailed illustration, concept art style",
+        "watercolor": "watercolor painting style, soft edges, artistic, traditional media",
+        "stylized": "stylized animation, bold colors, clean lines, distinctive shapes",
+        "solarpunk-nouveau": "art nouveau inspired, organic flowing lines, botanical motifs, stained glass elements",
+        "retro-futurism": "retro-futuristic style, vibrant optimistic palette, vintage poster aesthetic, hopeful utopian",
+        "isometric": "isometric illustration, clean technical lines, geometric patterns, architectural precision"
     }
     
     def __init__(self) -> None:
@@ -186,7 +187,7 @@ class ImageGenerator:
         setting_descriptor = setting_descriptors.get(setting, setting_descriptors["urban"])
         
         # Style enhancer from our predefined list
-        style_enhancer = self.STYLE_ENHANCERS.get(style, self.STYLE_ENHANCERS["photographic"])
+        style_enhancer = self.STYLE_ENHANCERS.get(style, self.STYLE_ENHANCERS["digital-art"])
         
         # Combine elements into a detailed prompt
         elements_text = ", ".join(present_elements) if present_elements else "harmonious integration of nature and technology"
@@ -318,7 +319,7 @@ class ImageGenerator:
         return full_path
 
 
-def create_simple_test(style: str = "photographic") -> None:
+def create_simple_test(style: str = "digital-art") -> None:
     """Create a simple test to verify the image generation functionality.
     
     This test mirrors the test_google_apis.py implementation to ensure 
@@ -388,11 +389,11 @@ def generate_test_images() -> None:
     ]
     
     # Image styles to test
-    styles = ["photographic", "digital-art", "watercolor"]
+    styles = ["digital-art", "watercolor", "stylized"]
     
     # Check if a specific setting and style was requested
     setting_input = sys.argv[1] if len(sys.argv) > 1 else "all"
-    style_input = sys.argv[2] if len(sys.argv) > 2 else "photographic"
+    style_input = sys.argv[2] if len(sys.argv) > 2 else "digital-art"
     
     # Filter settings if specific one requested
     if setting_input != "all":
@@ -406,7 +407,7 @@ def generate_test_images() -> None:
     
     # Filter styles if specific one requested
     if style_input not in styles:
-        style_input = "photographic"
+        style_input = "digital-art"
     
     # Process each selected setting
     for i in selected_indices:
@@ -468,7 +469,7 @@ if __name__ == "__main__":
     print("========================================")
     print("Usage: uv run src/image_generator.py [setting] [style]")
     print("Available settings: urban, coastal, forest, desert, rural, all")
-    print("Available styles: photographic, digital-art, watercolor")
-    print("Default: all settings with photographic style")
+    print("Available styles: digital-art, watercolor, stylized, solarpunk-nouveau, retro-futurism, isometric")
+    print("Default: all settings with digital-art style")
     
     generate_test_images() 
