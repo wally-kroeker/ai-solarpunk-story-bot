@@ -1,0 +1,70 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+ ---
+description: AI Solarpunk Story Bot Guidelines
+globs: *.*
+alwaysApply: true
+---
+
+# AI Solarpunk Story Bot Development Guidelines
+
+## Project Overview
+The AI Solarpunk Story Bot generates and publishes positive, futuristic solarpunk micro-stories with AI-generated images. Key components:
+- Story generation using Gemini Pro AI
+- Image generation using Imagen 2
+- Social media posting (primarily Twitter)
+- Scheduled publishing (moving from cron to systemd service)
+
+## Service Refactoring Guidelines
+
+### SystemD Service Implementation
+- Use systemd for service management instead of cron scheduling
+- Maintain the same functionality but with improved reliability and manageability
+- Ensure proper environment setup (working directory, environment variables)
+- Use absolute paths in service unit files (especially for UV executable)
+- Include environment variable definitions in the service unit file
+- Design the service for proper logging to systemd journal
+
+### Python Package Management
+- Always use UV for Python package management and script execution
+- SystemD service must reference UV with absolute paths: `/home/wally/.local/bin/uv`
+- Pass the UV_HTTP_TIMEOUT=300 environment variable in the service configuration
+- If adding new dependencies, update pyproject.toml using UV's format
+- When testing, always use `uv run` to execute Python scripts
+
+### Architecture Considerations
+- Maintain clear separation between service operation and user interface
+- Update `ai_future.sh` to provide service management commands (start, stop, status)
+- Keep the existing content generation functionality in the shell script
+- Ensure all paths are correctly resolved regardless of execution context
+- Create simple, focused components with clear responsibilities
+
+### Code Quality Requirements
+- Follow type hinting standards in all Python code (refer to pythonbestpractices.mdc)
+- Provide comprehensive logging for service events and errors
+- Include detailed docstrings for all functions and classes
+- Implement proper error handling for service failures
+- Make configuration options explicit and well-documented
+
+### Testing Requirements
+- Test the service in different execution contexts
+- Verify UV integration works within the systemd service
+- Ensure log output is properly captured and accessible
+- Validate service startup, shutdown, and restart functionality
+- Test manual content generation through the service
+
+## Design Principles
+- Prefer simplicity over complexity
+- Use existing OS capabilities (systemd) rather than custom implementations
+- Maintain backward compatibility where possible
+- Follow the Unix philosophy: do one thing well
+- Document all changes comprehensively
+
+## Implementation
+- Follow the tasks layed out in TASK.md file
+- Complete one task at a time.  
+- When a task is complete update the tasks.md file
+- When you complete a task always update git
