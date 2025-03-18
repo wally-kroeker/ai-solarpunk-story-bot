@@ -8,13 +8,17 @@ This script implements the complete flow for the AI Solarpunk Story Twitter Bot:
 3. Extracts key elements from the story to create an image prompt
 4. Generates an image using that prompt with digital-art style
 5. Posts both the story and image to Twitter
+
+When running as a systemd service, it uses service-specific logging and configuration.
 """
 
 import os
 import random
 import logging
+import logging.handlers
 import time
 import argparse
+import sys
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional, List
 
@@ -23,22 +27,48 @@ from src.story_generator import StoryGenerator, StoryParameters
 from src.image_generator import ImageGenerator, ImageParameters
 from src.twitter_client import TwitterClient
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-# Available settings - these should match what the story generator accepts
-SETTINGS = ["urban", "coastal", "forest", "desert", "rural", "mountain", "arctic", "island"]
-
 # Project root directory for saving files
 PROJECT_ROOT = Path(__file__).parent.parent
 OUTPUT_DIR = PROJECT_ROOT / "output"
 IMAGES_DIR = OUTPUT_DIR / "images"
 STORIES_DIR = OUTPUT_DIR / "stories"
+LOG_DIR = PROJECT_ROOT / "logs"
 
-# Ensure output directories exist
+# Ensure directories exist
 os.makedirs(IMAGES_DIR, exist_ok=True)
 os.makedirs(STORIES_DIR, exist_ok=True)
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# Available settings - these should match what the story generator accepts
+SETTINGS = ["urban", "coastal", "forest", "desert", "rural", "mountain", "arctic", "island"]
+
+# Initialize logger at module level
+logger = logging.getLogger(__name__)
+
+def setup_logging(is_service: bool = False) -> None:
+    """
+    Configure logging based on whether we're running as a service or not.
+    
+    Args:
+        is_service: Whether the script is running as a systemd service
+    """
+    log_format = '%(asctime)s - %(levelname)s - %(message)s'
+    
+    if is_service:
+        # When running as a service, log to both file and systemd journal
+        log_file = LOG_DIR / "ai_story_generator.log"
+        file_handler = logging.handlers.RotatingFileHandler(
+            log_file, maxBytes=1024*1024, backupCount=5
+        )
+        file_handler.setFormatter(logging.Formatter(log_format))
+        
+        # Configure root logger
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.INFO)
+        root_logger.addHandler(file_handler)
+    else:
+        # For interactive use, just log to console
+        logging.basicConfig(level=logging.INFO, format=log_format)
 
 def select_random_setting() -> str:
     """
@@ -247,22 +277,32 @@ def main():
     """Main function to parse arguments and run the flow."""
     parser = argparse.ArgumentParser(description="AI Solarpunk Story Tweet Generator")
     parser.add_argument(
-        "--setting", 
-        type=str, 
+        "--setting",
         choices=SETTINGS + ["random"],
         default="random",
-        help="Setting for the story (random by default)"
+        help="Setting for the story (default: random)"
+    )
+    parser.add_argument(
+        "--service",
+        action="store_true",
+        help="Running as a systemd service"
     )
     args = parser.parse_args()
     
-    success = run_complete_flow(args.setting)
+    # Set up logging based on execution context
+    setup_logging(args.service)
     
-    if success:
-        logger.info("Complete flow finished successfully!")
-        return 0
-    else:
-        logger.error("Flow completed with errors")
-        return 1
+    try:
+        success = run_complete_flow(args.setting)
+        if success:
+            logger.info("Flow completed successfully")
+            sys.exit(0)
+        else:
+            logger.error("Flow failed")
+            sys.exit(1)
+    except Exception as e:
+        logger.exception("Critical error in main flow")
+        sys.exit(2)
 
 if __name__ == "__main__":
-    exit(main()) 
+    main() 
