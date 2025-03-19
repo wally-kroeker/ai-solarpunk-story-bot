@@ -571,6 +571,66 @@ run_service_manually() {
     read -p "Press Enter to continue..."
 }
 
+# Function to view recent activity
+view_recent_activity() {
+    echo -e "\n${GREEN}Recent Activity${NC}"
+    echo -e "${YELLOW}1)${NC} View recent posts"
+    echo -e "${YELLOW}2)${NC} View recent images"
+    echo -e "${YELLOW}3)${NC} View recent previews"
+    echo -e "${YELLOW}4)${NC} View logs"
+    echo -e "${YELLOW}b)${NC} Back to main menu"
+    echo -e "${YELLOW}q)${NC} Quit"
+
+    read -p "Enter your choice: " activity_choice
+
+    case $activity_choice in
+        1)
+            echo -e "${BLUE}Recent posts:${NC}"
+            ls -lt output/stories/ | head -n 5
+            ;;
+        2)
+            echo -e "${BLUE}Recent images:${NC}"
+            ls -lt output/images/ | head -n 5
+            ;;
+        3)
+            echo -e "${BLUE}Recent previews:${NC}"
+            ls -lt output/previews/ | head -n 5
+            read -p "View a preview? (enter number or 'n'): " preview_num
+            if [[ $preview_num =~ ^[0-9]+$ ]]; then
+                preview_file=$(ls -t output/previews/ | sed -n "${preview_num}p")
+                if [ -n "$preview_file" ]; then
+                    preview_path="output/previews/$preview_file"
+                    cat "$preview_path"
+                    
+                    # Check if already posted
+                    if grep -q '"posted": true' "$preview_path"; then
+                        echo -e "\n${YELLOW}This preview has already been posted${NC}"
+                    else
+                        echo -e "\n${BLUE}Would you like to post this preview? [y/N]:${NC}"
+                        read -p "" post_choice
+                        if [[ $post_choice =~ ^[Yy]$ ]]; then
+                            run_generator "" "" "" false "--post-preview" "$preview_path"
+                        fi
+                    fi
+                fi
+            fi
+            ;;
+        4)
+            view_logs
+            ;;
+        b|B)
+            return
+            ;;
+        q|Q)
+            echo -e "${GREEN}Exiting.${NC}"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Invalid choice.${NC}"
+            ;;
+    esac
+}
+
 # Main menu
 main_menu() {
     local choice
@@ -588,7 +648,8 @@ main_menu() {
         echo "4) Test Service"
         echo "5) View Logs"
         echo "6) Run Service Now"
-        echo "7) Exit"
+        echo "7) View Recent Activity"
+        echo "8) Exit"
         
         read -p "Enter your choice: " choice
         
@@ -629,6 +690,9 @@ main_menu() {
                 run_service_manually
                 ;;
             7)
+                view_recent_activity
+                ;;
+            8)
                 echo -e "${GREEN}Goodbye!${NC}"
                 exit 0
                 ;;
