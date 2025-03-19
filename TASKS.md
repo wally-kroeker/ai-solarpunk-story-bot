@@ -309,6 +309,70 @@
 - [ ] Create web interface
 - [ ] Add more customization options
 
+## Feature Compatibility Implementation Plan
+
+### Pre-implementation Tasks
+- [ ] Update git repository with latest changes
+- [ ] Create a new feature branch for compatibility changes
+      - Use `git checkout -b feature/bot-manager-compatibility`
+
+### Content Management Features
+- [ ] Implement view_recent_activity function
+      - Add ability to view recent posts, images, and previews
+      - Include functionality to examine detailed post information
+      - Add option to post from previews
+- [ ] Add cleanup_outputs function 
+      - Support archiving of stories, images, and previews
+      - Include options for different retention periods
+      - Ensure backward compatibility with existing files
+- [ ] Implement clear_preview_files function
+      - Add dedicated option for managing preview files
+      - Include archiving capability before deletion
+- [ ] Add advanced generation options
+      - Implement feature selection system (story/image/post)
+      - Add parameterized generation controls
+      - Support custom settings and styles
+
+### Enhanced Preview Functionality
+- [ ] Improve preview_story_and_image function
+      - Add side-by-side display of story and image
+      - Support terminal image display using timg
+      - Implement proper terminal sizing detection
+- [ ] Add post_preview function
+      - Enable posting of previously generated content
+      - Add option to examine previews before posting
+      - Implement proper error handling for posting process
+
+### System Status Features
+- [ ] Implement check_system_status function
+      - Add comprehensive verification of system components
+      - Check for necessary directories and files
+      - Verify credentials and permissions
+- [ ] Add systemd diagnostics
+      - Create functions for checking service status
+      - Add timer verification functionality
+      - Include user-friendly service debugging tools
+
+### UI Improvements
+- [ ] Enhance header display and menu structure
+      - Maintain consistent visual styling across functions
+      - Ensure color usage is consistent
+      - Add improved menu navigation
+- [ ] Add detailed information displays
+      - Implement consistent color-coding system
+      - Show comprehensive timezone information
+      - Add service status visualization
+
+### Testing
+- [ ] Test each added feature with systemd architecture
+      - Verify all functions work correctly with service-based scheduling
+      - Ensure proper logging in service context
+      - Confirm timezone handling works with systemd timers
+- [ ] Verify backward compatibility
+      - Test with existing configurations
+      - Ensure all data files are handled correctly
+      - Validate timezone configuration compatibility
+
 ## Implementation Notes
 
 ### Service Management
