@@ -386,6 +386,7 @@
 - Added support for manual and scheduled operations
 - Implemented timezone-aware scheduling
 - Added comprehensive logging system
+- Fixed time parsing issue with morning hours (08:XX format) to prevent octal interpretation errors
 
 ### Known Issues
 1. Preview generation needs fixing in bot-manager.sh
