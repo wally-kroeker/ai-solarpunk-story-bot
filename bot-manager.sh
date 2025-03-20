@@ -216,6 +216,8 @@ run_generator() {
     local setting=$1
     local style=$2
     local preview=$3
+    local additional_flag=$4
+    local additional_value=$5
 
     # Ensure we're in the project directory
     cd "$(dirname "$0")"
@@ -232,9 +234,14 @@ run_generator() {
     local cmd="uv run src/ai_story_tweet_generator.py"
     
     # Add arguments if provided
-    [[ -n $setting ]] && cmd="$cmd --setting $setting"
-    [[ -n $style ]] && cmd="$cmd --style $style"
+    [[ -n $setting && $setting != "" ]] && cmd="$cmd --setting $setting"
+    [[ -n $style && $style != "" ]] && cmd="$cmd --style $style"
     [[ $preview == "true" ]] && cmd="$cmd --preview"
+    
+    # Add any additional flags and values
+    if [[ -n $additional_flag && -n $additional_value ]]; then
+        cmd="$cmd $additional_flag $additional_value"
+    fi
     
     echo -e "${BLUE}Running command: $cmd${NC}"
     
@@ -275,7 +282,123 @@ preview_story_and_image() {
     local style=$2
     
     echo -e "${YELLOW}Generating preview with setting: $setting, style: $style${NC}"
-    run_generator "$setting" "$style" "true"
+    
+    # Create/ensure the preview directory exists and is empty
+    local preview_dir="output/preview_files"
+    mkdir -p "$preview_dir"
+    rm -f "$preview_dir"/*
+    
+    # Run the generator in preview mode with output to preview directory
+    echo -e "${BLUE}Running generator...${NC}"
+    uv run src/ai_story_tweet_generator.py --setting "$setting" --style "$style" --features "story,image" --output-dir "$preview_dir"
+    
+    # Wait a moment for files to be written
+    sleep 2
+    
+    # Find the generated files
+    local story_file=$(find "$preview_dir" -name "story_*.txt" | head -n 1)
+    local image_file=$(find "$preview_dir" -name "image_*.png" | head -n 1)
+    
+    echo -e "${BLUE}Looking for files in: $preview_dir${NC}"
+    ls -la "$preview_dir"
+    
+    if [[ -n "$story_file" && -f "$story_file" ]]; then
+        echo -e "${GREEN}✓ Found story: $(basename "$story_file")${NC}"
+    else
+        echo -e "${RED}× Story file not found${NC}"
+    fi
+    
+    if [[ -n "$image_file" && -f "$image_file" ]]; then
+        echo -e "${GREEN}✓ Found image: $(basename "$image_file")${NC}"
+    else
+        echo -e "${RED}× Image file not found${NC}"
+        
+        # If we have a story but no image, try to generate the image separately
+        if [[ -n "$story_file" && -f "$story_file" ]]; then
+            echo -e "${YELLOW}Attempting to generate image from existing story...${NC}"
+            
+            # Call image generation directly
+            uv run src/ai_story_tweet_generator.py --setting "$setting" --style "$style" --features "image" --story-file "$story_file" --output-dir "$preview_dir"
+            sleep 2
+            
+            # Look for image again
+            image_file=$(find "$preview_dir" -name "image_*.png" | head -n 1)
+        fi
+    fi
+    
+    if [[ -n "$story_file" && -n "$image_file" && -f "$story_file" && -f "$image_file" ]]; then
+        echo -e "${GREEN}✓ Generation complete${NC}"
+        
+        # Get terminal dimensions
+        local term_width=$(tput cols || echo 80)
+        local term_height=$(tput lines || echo 24)
+        
+        # Ensure minimum dimensions
+        if [ "$term_width" -lt 80 ]; then
+            term_width=80
+        fi
+        if [ "$term_height" -lt 24 ]; then
+            term_height=24
+        fi
+        
+        # Calculate image width (use ~40% of terminal width)
+        local img_width=$((term_width * 4 / 10))
+        local text_width=$((term_width / 2 - 5))
+        
+        # Clear screen for better presentation
+        clear
+        
+        # Print header
+        echo -e "${CYAN}======= Solarpunk Story Preview =======${NC}\n"
+        
+        # Create a temporary file for the story with proper formatting
+        local temp_story=$(mktemp)
+        fold -s -w "$text_width" "$story_file" > "$temp_story"
+        
+        # Display story with padding
+        echo -e "${YELLOW}Story:${NC}\n"
+        cat "$temp_story"
+        
+        # Add vertical space
+        echo -e "\n"
+        
+        # Display image
+        echo -e "${YELLOW}Image:${NC}\n"
+        if command -v timg &> /dev/null; then
+            timg -g "${img_width}x$((term_height/2))" -U -F -C -p h "$image_file"
+        else
+            echo -e "${RED}timg not found. Cannot display image preview.${NC}"
+            echo -e "${BLUE}Image saved at: $image_file${NC}"
+        fi
+        
+        # Clean up temporary file
+        rm "$temp_story"
+        
+        # Add visual separator
+        echo -e "\n${CYAN}=========================================${NC}"
+        echo -e "${YELLOW}Would you like to post this story and image? (y/n)${NC}"
+        read -r response
+        
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            echo -e "${BLUE}Posting story and image...${NC}"
+            
+            # Use the existing files directly instead of creating new ones
+            echo -e "${GREEN}Using story: $story_file${NC}"
+            echo -e "${GREEN}Using image: $image_file${NC}"
+            
+            # Post using the generator with the post-files flag
+            uv run src/ai_story_tweet_generator.py --post-files "$story_file:$image_file"
+            
+            echo -e "${GREEN}Story and image have been posted${NC}"
+        else
+            echo -e "${YELLOW}Preview closed without posting.${NC}"
+        fi
+    else
+        echo -e "${RED}Error: Could not find all required generated files in preview directory${NC}"
+        echo -e "${YELLOW}Preview directory contents:${NC}"
+        ls -la "$preview_dir"
+        read -p "Press Enter to continue..."
+    fi
 }
 
 # Function to check service status
@@ -634,6 +757,186 @@ view_recent_activity() {
     esac
 }
 
+# Function to clear only preview files
+clear_preview_files() {
+    echo -e "\n${BLUE}Clearing Preview Files${NC}"
+    
+    # Check if the preview directory exists
+    local preview_dir="output/preview_files"
+    if [ ! -d "$preview_dir" ]; then
+        mkdir -p "$preview_dir"
+        echo -e "${YELLOW}Preview directory created.${NC}"
+        return
+    fi
+    
+    # Count files before clearing
+    local file_count=$(find "$preview_dir" -type f | wc -l)
+    
+    if [ $file_count -eq 0 ]; then
+        echo -e "${YELLOW}No preview files to clear.${NC}"
+        return
+    fi
+    
+    echo -e "${YELLOW}Found $file_count preview files. What would you like to do?${NC}"
+    echo -e "${CYAN}1)${NC} Delete all preview files"
+    echo -e "${CYAN}2)${NC} Archive preview files before deleting"
+    echo -e "${CYAN}b)${NC} Cancel operation"
+    
+    read -p "Enter your choice: " clear_choice
+    
+    case $clear_choice in
+        1)
+            # Delete files directly
+            rm -f "$preview_dir"/*
+            echo -e "${GREEN}✓${NC} Deleted $file_count preview files"
+            ;;
+        2)
+            # Archive before deleting
+            local timestamp=$(date +%Y%m%d_%H%M%S)
+            local archive_dir="archive/preview_files_${timestamp}"
+            mkdir -p "$archive_dir"
+            
+            # Move files to archive
+            mv "$preview_dir"/* "$archive_dir/" 2>/dev/null
+            
+            echo -e "${GREEN}✓${NC} Archived $file_count preview files to $archive_dir"
+            ;;
+        b|B)
+            echo -e "${YELLOW}Operation cancelled.${NC}"
+            return
+            ;;
+        *)
+            echo -e "${RED}Invalid choice.${NC}"
+            return
+            ;;
+    esac
+}
+
+# Updated function to clean up and archive output folders
+cleanup_outputs() {
+    echo -e "\n${GREEN}Output Folder Cleanup and Archiving${NC}"
+    
+    # Create archive directory with timestamp
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local archive_dir="archive/${timestamp}"
+    mkdir -p "$archive_dir/stories" "$archive_dir/images" "$archive_dir/previews" "$archive_dir/preview_files"
+    
+    echo -e "${BLUE}Select cleanup option:${NC}"
+    echo -e "${YELLOW}1)${NC} Archive everything"
+    echo -e "${YELLOW}2)${NC} Keep files from last 7 days, archive the rest"
+    echo -e "${YELLOW}3)${NC} Keep files from last 30 days, archive the rest"
+    echo -e "${YELLOW}4)${NC} Custom (select what to archive)"
+    echo -e "${YELLOW}5)${NC} Clear preview files only"
+    echo -e "${YELLOW}b)${NC} Back to main menu"
+    
+    read -p "Enter your choice: " cleanup_choice
+    
+    case $cleanup_choice in
+        1)
+            # Archive everything
+            echo -e "${BLUE}Archiving all output files...${NC}"
+            
+            # Count files before moving
+            local stories_count=$(find output/stories -type f | wc -l)
+            local images_count=$(find output/images -type f | wc -l)
+            local previews_count=$(find output/previews -type f | wc -l)
+            local preview_files_count=$(find output/preview_files -type f 2>/dev/null | wc -l)
+            
+            # Move all files to archive
+            mv output/stories/* "$archive_dir/stories/" 2>/dev/null
+            mv output/images/* "$archive_dir/images/" 2>/dev/null
+            mv output/previews/* "$archive_dir/previews/" 2>/dev/null
+            mv output/preview_files/* "$archive_dir/preview_files/" 2>/dev/null
+            
+            echo -e "${GREEN}✓${NC} Archived $stories_count stories, $images_count images, $previews_count previews, and $preview_files_count preview files"
+            echo -e "${GREEN}✓${NC} Archive location: $archive_dir"
+            ;;
+            
+        2|3)
+            # Keep recent files, archive older ones
+            local days=7
+            [[ $cleanup_choice -eq 3 ]] && days=30
+            
+            echo -e "${BLUE}Keeping files from last $days days, archiving older files...${NC}"
+            
+            # Find files older than specified days
+            find output/stories -type f -mtime +$days -exec mv {} "$archive_dir/stories/" \;
+            find output/images -type f -mtime +$days -exec mv {} "$archive_dir/images/" \;
+            find output/previews -type f -mtime +$days -exec mv {} "$archive_dir/previews/" \;
+            find output/preview_files -type f -mtime +$days -exec mv {} "$archive_dir/preview_files/" \; 2>/dev/null
+            
+            # Count files in archive
+            local archive_count=$(find "$archive_dir" -type f | wc -l)
+            
+            if [ $archive_count -eq 0 ]; then
+                echo -e "${YELLOW}No files older than $days days were found.${NC}"
+                rmdir -p "$archive_dir/stories" "$archive_dir/images" "$archive_dir/previews" "$archive_dir/preview_files" 2>/dev/null
+            else
+                echo -e "${GREEN}✓${NC} Archived $archive_count files older than $days days"
+                echo -e "${GREEN}✓${NC} Archive location: $archive_dir"
+            fi
+            ;;
+            
+        4)
+            # Custom archiving
+            echo -e "\n${BLUE}Custom Archiving${NC}"
+            echo -e "${YELLOW}a)${NC} Archive stories"
+            echo -e "${YELLOW}b)${NC} Archive images"
+            echo -e "${YELLOW}c)${NC} Archive previews"
+            echo -e "${YELLOW}d)${NC} Archive preview_files"
+            echo -e "${YELLOW}q)${NC} Cancel archiving"
+            
+            read -p "Select folders to archive (e.g., abc for stories, images, and previews): " archive_selection
+            
+            if [[ $archive_selection =~ [aA] ]]; then
+                mv output/stories/* "$archive_dir/stories/" 2>/dev/null
+                echo -e "${GREEN}✓${NC} Archived stories"
+            fi
+            
+            if [[ $archive_selection =~ [bB] ]]; then
+                mv output/images/* "$archive_dir/images/" 2>/dev/null
+                echo -e "${GREEN}✓${NC} Archived images"
+            fi
+            
+            if [[ $archive_selection =~ [cC] ]]; then
+                mv output/previews/* "$archive_dir/previews/" 2>/dev/null
+                echo -e "${GREEN}✓${NC} Archived previews"
+            fi
+            
+            if [[ $archive_selection =~ [dD] ]]; then
+                mv output/preview_files/* "$archive_dir/preview_files/" 2>/dev/null
+                echo -e "${GREEN}✓${NC} Archived preview_files"
+            fi
+            
+            # Check if any files were archived
+            local archive_count=$(find "$archive_dir" -type f | wc -l)
+            
+            if [ $archive_count -eq 0 ]; then
+                echo -e "${YELLOW}No files were archived.${NC}"
+                rmdir -p "$archive_dir" 2>/dev/null
+            else
+                echo -e "${GREEN}✓${NC} Archive location: $archive_dir"
+            fi
+            ;;
+            
+        5)
+            # Just clear preview files
+            clear_preview_files
+            ;;
+            
+        b|B)
+            return
+            ;;
+            
+        *)
+            echo -e "${RED}Invalid choice.${NC}"
+            ;;
+    esac
+    
+    # Ensure output directories exist after cleanup
+    mkdir -p output/stories output/images output/previews output/preview_files
+}
+
 # Main menu
 main_menu() {
     local choice
@@ -652,7 +955,8 @@ main_menu() {
         echo "5) View Logs"
         echo "6) Run Service Now"
         echo "7) View Recent Activity"
-        echo "8) Exit"
+        echo "8) Cleanup and Archive Outputs"
+        echo "9) Exit"
         
         read -p "Enter your choice: " choice
         
@@ -696,6 +1000,9 @@ main_menu() {
                 view_recent_activity
                 ;;
             8)
+                cleanup_outputs
+                ;;
+            9)
                 echo -e "${GREEN}Goodbye!${NC}"
                 exit 0
                 ;;

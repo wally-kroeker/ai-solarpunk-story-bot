@@ -223,7 +223,9 @@ def run_generation(
     style: Optional[str] = None,
     features: Optional[List[str]] = None,
     preview_only: bool = False,
-    output_dir: Optional[str] = None
+    output_dir: Optional[str] = None,
+    existing_story: Optional[str] = None,
+    existing_story_file: Optional[str] = None
 ) -> GenerationResult:
     """Run the complete or partial generation flow based on specified features."""
     try:
@@ -240,10 +242,18 @@ def run_generation(
             features = ["story", "image", "post"]
         
         result = GenerationResult(success=False)
+        story = existing_story
+        story_metadata = {"source": "provided"} if existing_story else None
         
-        # 2. Generate story if requested
-        if "story" in features:
+        # 2. Generate story if requested and no existing story is provided
+        if "story" in features and not story:
             story, story_metadata = generate_story(setting, output_dir)
+            result = result._replace(
+                story=story,
+                story_metadata=story_metadata
+            )
+        # If we have an existing story but didn't generate one, use that
+        elif story:
             result = result._replace(
                 story=story,
                 story_metadata=story_metadata
@@ -251,38 +261,34 @@ def run_generation(
         
         # 3. Generate image if requested
         if "image" in features and result.story:
-            # Optionally extract image prompt
+            # Extract image prompt from the story
             image_prompt = extract_image_prompt(result.story)
             
-            # Generate image
+            # Generate the image using the extracted prompt
             image_path, image_metadata = generate_image(
-                result.story,
-                setting,
-                style,
-                image_prompt,
-                output_dir
+                result.story, 
+                setting, 
+                style, 
+                image_prompt=image_prompt,
+                output_dir=output_dir
             )
+            
             result = result._replace(
                 image_path=image_path,
                 image_metadata=image_metadata
             )
         
-        # 4. Post to Twitter if requested and not preview only
+        # 4. Post to Twitter if requested and not in preview mode
         if "post" in features and not preview_only and result.story and result.image_path:
             tweet_id = post_to_twitter(result.story, result.image_path)
             result = result._replace(tweet_id=tweet_id)
-        
-        # 5. Save preview if requested
-        if preview_only:
-            preview_file = save_preview(result)
-            logger.info(f"Preview saved to: {preview_file}")
-        
-        return result._replace(success=True)
-        
+            
+        # Mark the generation as successful
+        result = result._replace(success=True)
+        return result
     except Exception as e:
-        error_msg = f"Error in generation flow: {str(e)}"
-        logger.error(error_msg)
-        return GenerationResult(success=False, error=error_msg)
+        logger.error(f"Error during generation: {e}")
+        return GenerationResult(success=False, error=str(e))
 
 def post_from_preview(preview_file: str) -> bool:
     """Post content from a previously generated preview file."""
@@ -320,87 +326,122 @@ def post_from_preview(preview_file: str) -> bool:
         return False
 
 def main():
-    """Main function to parse arguments and run the flow."""
-    parser = argparse.ArgumentParser(description="AI Solarpunk Story Tweet Generator")
-    parser.add_argument(
-        "--setting",
-        type=str,
-        choices=SETTINGS + ["random"],
-        default="random",
-        help="Setting for the story (random by default)"
-    )
-    parser.add_argument(
-        "--style",
-        type=str,
-        choices=STYLES + ["random"],
-        default="digital-art",
-        help="Style for the image (digital-art by default)"
-    )
-    parser.add_argument(
-        "--features",
-        type=str,
-        nargs="+",
-        choices=FEATURES,
-        default=["story", "image", "post"],
-        help="Features to include in generation"
-    )
-    parser.add_argument(
-        "--preview",
-        action="store_true",
-        help="Generate preview only, don't post to Twitter"
-    )
-    parser.add_argument(
-        "--post-preview",
-        type=str,
-        help="Post content from a preview file"
-    )
-    parser.add_argument(
-        "--post-files",
-        type=str,
-        help="Post from specific story and image files (format: story_path:image_path)"
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=str,
-        help="Custom output directory for generated files"
-    )
+    """Parse command line arguments and run the generator."""
+    parser = argparse.ArgumentParser(description='AI Solarpunk Story Tweet Generator')
+    
+    # Input options
+    parser.add_argument('--setting', type=str, choices=SETTINGS + ['random'],
+                      help='Setting for the story (or "random")')
+    parser.add_argument('--style', type=str, choices=STYLES + ['random'],
+                      help='Style for the image (or "random")')
+    parser.add_argument('--features', type=str, default="story,image,post",
+                      help='Comma-separated list of features to generate (story,image,post)')
+    parser.add_argument('--preview', action='store_true',
+                      help='Generate for preview only (no posting)')
+    parser.add_argument('--output-dir', type=str,
+                      help='Directory to save output files')
+    
+    # Add story-file option for using an existing story
+    parser.add_argument('--story-file', type=str,
+                      help='Use an existing story file instead of generating a new one')
+    
+    # Direct posting options
+    parser.add_argument('--post-files', type=str,
+                      help='Post existing files (format: "story_path:image_path")')
+    parser.add_argument('--post-preview', type=str,
+                      help='Post from a preview file')
     
     args = parser.parse_args()
     
-    if args.post_preview:
-        success = post_from_preview(args.post_preview)
-        return 0 if success else 1
-    
-    if args.post_files:
-        try:
+    try:
+        # Handle the post-files option (direct posting of existing files)
+        if args.post_files:
             story_path, image_path = args.post_files.split(':')
-            with open(story_path, 'r') as f:
-                story = f.read().strip()
             
-            if os.path.exists(image_path):
-                tweet_id = post_to_twitter(story, image_path)
-                logger.info(f"Successfully posted from files, tweet ID: {tweet_id}")
-                return 0
-            else:
-                logger.error(f"Image file not found: {image_path}")
-                return 1
-        except Exception as e:
-            logger.error(f"Error posting from files: {e}")
+            # Read the story content
+            with open(story_path, 'r') as f:
+                story = f.read()
+                
+            # Post directly
+            tweet_id = post_to_twitter(story, image_path)
+            logger.info(f"Posted existing files successfully. Tweet ID: {tweet_id}")
+            return 0
+            
+        # Handle the post-preview option
+        if args.post_preview:
+            with open(args.post_preview, 'r') as f:
+                preview_data = json.load(f)
+                
+            # Post the story and image from the preview
+            tweet_id = post_to_twitter(preview_data['story'], preview_data['image_path'])
+            
+            # Update the preview file to mark as posted
+            preview_data['posted'] = True
+            preview_data['tweet_id'] = tweet_id
+            
+            with open(args.post_preview, 'w') as f:
+                json.dump(preview_data, f, indent=2)
+                
+            logger.info(f"Posted from preview successfully. Tweet ID: {tweet_id}")
+            return 0
+        
+        # Parse features
+        features = [f.strip() for f in args.features.split(',')]
+        
+        # If we're generating just an image but using an existing story file,
+        # make sure "story" is not in features to avoid regenerating it
+        if args.story_file and "image" in features and "story" in features:
+            features.remove("story")
+        
+        # Handle story-file option
+        existing_story = None
+        
+        if args.story_file:
+            with open(args.story_file, 'r') as f:
+                existing_story = f.read()
+            
+            # Extract setting from the filename if possible
+            filename = os.path.basename(args.story_file)
+            if filename.startswith("story_"):
+                parts = filename.split("_")
+                if len(parts) > 1 and not args.setting:
+                    args.setting = parts[1]
+            
+            logger.info(f"Using existing story from {args.story_file}")
+        
+        # Run the generator
+        result = run_generation(
+            setting=args.setting,
+            style=args.style,
+            features=features,
+            preview_only=args.preview,
+            output_dir=args.output_dir,
+            existing_story=existing_story,
+            existing_story_file=args.story_file
+        )
+        
+        # Save preview if requested
+        if args.preview:
+            preview_file = save_preview(result)
+            logger.info(f"Preview saved to {preview_file}")
+            
+        # Show summary if successful
+        if result.success:
+            logger.info("Generation completed successfully")
+            if result.story:
+                logger.info(f"Story length: {len(result.story)} characters")
+            if result.image_path:
+                logger.info(f"Image saved to: {result.image_path}")
+            if result.tweet_id:
+                logger.info(f"Posted to Twitter with ID: {result.tweet_id}")
+                
+            return 0
+        else:
+            logger.error(f"Generation failed: {result.error}")
             return 1
-    
-    result = run_generation(
-        setting=args.setting,
-        style=args.style,
-        features=args.features,
-        preview_only=args.preview,
-        output_dir=args.output_dir
-    )
-    
-    if result.success:
-        logger.info("Generation completed successfully!")
-        return 0
-    else:
-        logger.error(f"Generation failed: {result.error}")
+            
+    except Exception as e:
+        logger.exception(f"Error running generator: {e}")
         return 1
 
 if __name__ == "__main__":

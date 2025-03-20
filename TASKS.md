@@ -297,10 +297,10 @@
 ## Outstanding Issues
 
 ### Preview System
-- [ ] Fix preview generation in bot-manager.sh
-  - Preview function not displaying generated content
-  - Image saving/display functionality needs investigation
-  - Integration between Python script and shell interface needs review
+- [x] Fix preview generation in bot-manager.sh
+  - Preview function now correctly displays generated content
+  - Image saving/display functionality fixed
+  - Integration between Python script and shell interface improved
 
 ### Future Enhancements
 - [ ] Add more image generation styles
@@ -321,11 +321,11 @@
       - Add ability to view recent posts, images, and previews
       - Include functionality to examine detailed post information
       - Add option to post from previews
-- [ ] Add cleanup_outputs function 
+- [x] Add cleanup_outputs function 
       - Support archiving of stories, images, and previews
       - Include options for different retention periods
       - Ensure backward compatibility with existing files
-- [ ] Implement clear_preview_files function
+- [x] Implement clear_preview_files function
       - Add dedicated option for managing preview files
       - Include archiving capability before deletion
 - [ ] Add advanced generation options
@@ -334,14 +334,14 @@
       - Support custom settings and styles
 
 ### Enhanced Preview Functionality
-- [ ] Improve preview_story_and_image function
-      - Add side-by-side display of story and image
-      - Support terminal image display using timg
-      - Implement proper terminal sizing detection
-- [ ] Add post_preview function
-      - Enable posting of previously generated content
-      - Add option to examine previews before posting
-      - Implement proper error handling for posting process
+- [x] Improve preview_story_and_image function
+      - Added side-by-side display of story and image
+      - Implemented terminal image display using timg
+      - Added proper terminal sizing detection
+- [x] Add post_preview function
+      - Enabled posting of previously generated content
+      - Added option to examine previews before posting
+      - Implemented proper error handling for posting process
 
 ### System Status Features
 - [ ] Implement check_system_status function
