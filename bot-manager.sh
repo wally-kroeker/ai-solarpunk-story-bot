@@ -388,6 +388,9 @@ manage_schedule() {
                 if [[ $local_time =~ ^([0-1][0-9]|2[0-3]):[0-5][0-9]$ ]]; then
                     local hour=${local_time%:*}
                     local minute=${local_time#*:}
+                    # Remove leading zeros to avoid bash treating numbers as octal
+                    hour=$((10#$hour))
+                    minute=$((10#$minute))
                     local utc_time=$(convert_to_utc $hour $minute)
                     
                     # Validate timer file exists
