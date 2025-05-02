@@ -362,30 +362,53 @@ preview_story_and_image() {
         else
             # Fallback if jq is not installed - parse manually
             echo -e "${YELLOW}jq is not installed. Basic display only.${NC}"
-            echo -e "${RED}For best experience, please install jq with: sudo apt install jq${NC}"
+            echo -e "${RED}For best experience, please install jq with: sudo apt install jq${NC}\n"
             
-            # Try a basic approach to show the stories
-            local line_num=1
-            local current_story=""
-            local in_story=0
-            
-            # Read the candidates file line by line to extract stories
-            while IFS= read -r line; do
-                if [[ $line == *"STORY"* || $line == *"Candidate"* ]]; then
-                    if [ $in_story -eq 1 ]; then
-                        echo -e "$current_story\n"
-                        current_story=""
-                    fi
-                    echo -e "${YELLOW}$line${NC}"
-                    in_story=1
-                elif [ $in_story -eq 1 ]; then
-                    current_story+="$line\n"
-                fi
-            done < <(cat "$candidates_file" | grep -A2 -B1 "Candidate\|STORY\|selected_story")
-            
-            # Show the selected story at the end
-            echo -e "\n${GREEN}Selected story:${NC}"
-            cat "$story_file"
+            # Install python if needed to parse JSON
+            if command -v python3 &> /dev/null; then
+                echo -e "${CYAN}======= All Story Candidates =======${NC}\n"
+                
+                # Use Python to parse and display the candidates
+                python3 -c "
+import json, sys
+try:
+    with open('$candidates_file', 'r') as f:
+        data = json.load(f)
+    
+    # Display all stories
+    for i, story in enumerate(data['stories']):
+        if i == data.get('selected_index', -1):
+            print('\033[92m★ SELECTED - Candidate ' + str(i+1) + ' ★\033[0m')  # Green
+            print('\033[92m' + story + '\033[0m\n')  # Green
+        else:
+            print('\033[93mCandidate ' + str(i+1) + ':\033[0m')  # Yellow
+            print(story + '\n')
+    
+    # Display selection reasons
+    print('\033[96m======= Selection Reasoning =======\033[0m\n')  # Cyan
+    selected_idx = data.get('selected_index', 0)
+    print('\033[93mReasons why Candidate #' + str(selected_idx+1) + ' was selected:\033[0m')  # Yellow
+    print(data.get('selection_reasons', 'No reasons provided'))
+    
+except Exception as e:
+    print('Error parsing JSON: ' + str(e))
+    # Fallback to showing just the selected story
+    print('\033[92mSelected story:\033[0m')  # Green
+" || {
+                    # If Python fails, fall back to the simplest method
+                    echo -e "${CYAN}======= All Story Candidates =======${NC}\n"
+                    echo -e "${YELLOW}Unable to parse all candidates. Showing selected story only:${NC}\n"
+                    echo -e "${GREEN}Selected story:${NC}"
+                    cat "$story_file"
+                }
+            else
+                # No Python available
+                echo -e "${CYAN}======= Selected Story =======${NC}\n"
+                echo -e "${YELLOW}Neither jq nor Python is available to parse all candidates.${NC}"
+                echo -e "${YELLOW}Showing selected story only:${NC}\n"
+                echo -e "${GREEN}Selected story:${NC}"
+                cat "$story_file"
+            fi
         fi
         
         echo -e "\n${CYAN}=========================================${NC}"
