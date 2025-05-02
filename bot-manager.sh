@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck shell=bash
 # AI Solarpunk Story Bot - Enhanced Management Interface
 
 # Set environment variables for UV
@@ -20,8 +21,10 @@ SERVICE_NAME="ai-solarpunk-story"
 SYSTEMD_DIR="/etc/systemd/system"
 
 # Available settings and styles
-SETTINGS=("urban" "coastal" "forest" "desert" "rural" "mountain" "arctic" "island")
-STYLES=("digital-art" "watercolor" "stylized" "solarpunk-nouveau" "retro-futurism" "isometric")
+SETTINGS=("urban" "coastal" "forest" "desert" "rural" "mountain" "arctic" "island" \
+  "wetland" "grassland" "reef" "reclaimed-industrial" "geothermal" "sky-city" "subterranean" "orbital")
+STYLES=("digital-art" "watercolor" "stylized" "solarpunk-nouveau" "retro-futurism" "isometric" \
+  "paper-cut" "low-poly" "ukiyo-e" "stained-glass" "claymation" "pixel-art" "flat-vector" "impressionist" "holo-neon")
 
 # Function to display the script header
 show_header() {
@@ -288,16 +291,19 @@ preview_story_and_image() {
     mkdir -p "$preview_dir"
     rm -f "$preview_dir"/*
     
-    # Run the generator in preview mode with output to preview directory
+    # Run the generator in preview mode with output to preview directory, capture output
     echo -e "${BLUE}Running generator...${NC}"
-    uv run src/ai_story_tweet_generator.py --setting "$setting" --style "$style" --features "story,image" --output-dir "$preview_dir"
+    local generator_output
+    generator_output=$(uv run src/ai_story_tweet_generator.py --setting "$setting" --style "$style" --features "story,image" --output-dir "$preview_dir" 2>&1)
+    echo "$generator_output"
     
-    # Wait a moment for files to be written
-    sleep 2
-    
-    # Find the generated files
-    local story_file=$(find "$preview_dir" -name "story_*.txt" | head -n 1)
-    local image_file=$(find "$preview_dir" -name "image_*.png" | head -n 1)
+    # Find the generated story file and extract its base name
+    local story_file base_name image_file
+    story_file=$(find "$preview_dir" -name "story_*.txt" | head -n 1)
+    if [[ -n "$story_file" ]]; then
+        base_name=$(basename "$story_file" | sed -E 's/^story_(.*)\.txt$/\1/')
+        image_file="$preview_dir/image_${base_name}.png"
+    fi
     
     echo -e "${BLUE}Looking for files in: $preview_dir${NC}"
     ls -la "$preview_dir"
@@ -305,99 +311,52 @@ preview_story_and_image() {
     if [[ -n "$story_file" && -f "$story_file" ]]; then
         echo -e "${GREEN}✓ Found story: $(basename "$story_file")${NC}"
     else
-        echo -e "${RED}× Story file not found${NC}"
+        echo -e "${RED}× Story file not found in $preview_dir${NC}"
+        read -p "Press Enter to continue..."
+        return
     fi
     
     if [[ -n "$image_file" && -f "$image_file" ]]; then
         echo -e "${GREEN}✓ Found image: $(basename "$image_file")${NC}"
     else
-        echo -e "${RED}× Image file not found${NC}"
-        
-        # If we have a story but no image, try to generate the image separately
-        if [[ -n "$story_file" && -f "$story_file" ]]; then
-            echo -e "${YELLOW}Attempting to generate image from existing story...${NC}"
-            
-            # Call image generation directly
-            uv run src/ai_story_tweet_generator.py --setting "$setting" --style "$style" --features "image" --story-file "$story_file" --output-dir "$preview_dir"
-            sleep 2
-            
-            # Look for image again
-            image_file=$(find "$preview_dir" -name "image_*.png" | head -n 1)
-        fi
+        echo -e "${RED}× Image file not found for base name: $base_name in $preview_dir${NC}"
+        read -p "Press Enter to continue..."
+        return
     fi
     
-    if [[ -n "$story_file" && -n "$image_file" && -f "$story_file" && -f "$image_file" ]]; then
-        echo -e "${GREEN}✓ Generation complete${NC}"
-        
-        # Get terminal dimensions
-        local term_width=$(tput cols || echo 80)
-        local term_height=$(tput lines || echo 24)
-        
-        # Ensure minimum dimensions
-        if [ "$term_width" -lt 80 ]; then
-            term_width=80
-        fi
-        if [ "$term_height" -lt 24 ]; then
-            term_height=24
-        fi
-        
-        # Calculate image width (use ~40% of terminal width)
-        local img_width=$((term_width * 4 / 10))
-        local text_width=$((term_width / 2 - 5))
-        
-        # Clear screen for better presentation
-        clear
-        
-        # Print header
-        echo -e "${CYAN}======= Solarpunk Story Preview =======${NC}\n"
-        
-        # Create a temporary file for the story with proper formatting
-        local temp_story=$(mktemp)
-        fold -s -w "$text_width" "$story_file" > "$temp_story"
-        
-        # Display story with padding
-        echo -e "${YELLOW}Story:${NC}\n"
-        cat "$temp_story"
-        
-        # Add vertical space
-        echo -e "\n"
-        
-        # Display image
-        echo -e "${YELLOW}Image:${NC}\n"
-        if command -v timg &> /dev/null; then
-            timg -g "${img_width}x$((term_height/2))" -U -F -C -p h "$image_file"
-        else
-            echo -e "${RED}timg not found. Cannot display image preview.${NC}"
-            echo -e "${BLUE}Image saved at: $image_file${NC}"
-        fi
-        
-        # Clean up temporary file
-        rm "$temp_story"
-        
-        # Add visual separator
-        echo -e "\n${CYAN}=========================================${NC}"
-        echo -e "${YELLOW}Would you like to post this story and image? (y/n)${NC}"
-        read -r response
-        
-        if [[ "$response" =~ ^[Yy]$ ]]; then
-            echo -e "${BLUE}Posting story and image...${NC}"
-            
-            # Use the existing files directly instead of creating new ones
-            echo -e "${GREEN}Using story: $story_file${NC}"
-            echo -e "${GREEN}Using image: $image_file${NC}"
-            
-            # Post using the generator with the post-files flag
-            uv run src/ai_story_tweet_generator.py --post-files "$story_file:$image_file"
-            
-            echo -e "${GREEN}Story and image have been posted${NC}"
-        else
-            echo -e "${YELLOW}Preview closed without posting.${NC}"
-        fi
+    # Display preview
+    local term_width=$(tput cols || echo 80)
+    local term_height=$(tput lines || echo 24)
+    if [ "$term_width" -lt 80 ]; then term_width=80; fi
+    if [ "$term_height" -lt 24 ]; then term_height=24; fi
+    local img_width=$((term_width * 4 / 10))
+    local text_width=$((term_width / 2 - 5))
+    clear
+    echo -e "${CYAN}======= Solarpunk Story Preview =======${NC}\n"
+    local temp_story=$(mktemp)
+    fold -s -w "$text_width" "$story_file" > "$temp_story"
+    echo -e "${YELLOW}Story:${NC}\n"
+    cat "$temp_story"
+    echo -e "\n"
+    echo -e "${YELLOW}Image:${NC}\n"
+    if command -v timg &> /dev/null; then
+        timg -g "${img_width}x$((term_height/2))" -U -F -C -p h "$image_file"
     else
-        echo -e "${RED}Error: Could not find all required generated files in preview directory${NC}"
-        echo -e "${YELLOW}Preview directory contents:${NC}"
-        ls -la "$preview_dir"
-        read -p "Press Enter to continue..."
+        echo -e "${RED}timg not found. Cannot display image preview.${NC}"
+        echo -e "${BLUE}Image saved at: $image_file${NC}"
+    fi
+    rm "$temp_story"
+    echo -e "\n${CYAN}=========================================${NC}"
+    echo -e "${YELLOW}Would you like to post this story and image? (y/n)${NC}"
+    read -r response
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}Posting story and image...${NC}"
+        echo -e "${GREEN}Using story: $story_file${NC}"
+        echo -e "${GREEN}Using image: $image_file${NC}"
+        uv run src/ai_story_tweet_generator.py --post-files "$story_file:$image_file"
+        echo -e "${GREEN}Story and image have been posted${NC}"
+    else
+        echo -e "${YELLOW}Preview closed without posting.${NC}"
     fi
 }
 
@@ -673,7 +632,7 @@ run_service_manually() {
                     return
                 elif [[ -n $setting ]]; then
                     echo -e "\n${YELLOW}Select Style:${NC}"
-                    select style in "${STYLES[@]}" "back"; do
+                    select style in "${STYLES[@]}" "random" "back"; do
                         if [[ $style == "back" ]]; then
                             break
                         elif [[ -n $style ]]; then
@@ -968,7 +927,7 @@ main_menu() {
                         break
                     elif [[ -n $setting ]]; then
                         echo -e "\n${YELLOW}Select Style:${NC}"
-                        select style in "${STYLES[@]}" "back"; do
+                        select style in "${STYLES[@]}" "random" "back"; do
                             if [[ $style == "back" ]]; then
                                 break
                             elif [[ -n $style ]]; then

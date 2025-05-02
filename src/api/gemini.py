@@ -28,7 +28,7 @@ class GeminiProClient:
         project_id: str,
         location: str = "us-central1",
         credentials_path: Optional[str] = None,
-        model_name: str = "gemini-pro",
+        model_name: str = "gemini-2.5-pro-preview-03-25",
     ) -> None:
         """Initialize the Gemini Pro client.
         
@@ -115,20 +115,20 @@ class GeminiProClient:
                 "top_k": top_k,
                 "max_output_tokens": max_output_tokens,
             }
-            
+            logger.info(f"Sending prompt to Gemini: {prompt[:200]}...")
+            logger.info(f"Generation config: {generation_config}")
             response = self.model.generate_content(
                 prompt,
                 generation_config=generation_config
             )
-            
-            if not response.text:
-                logger.warning("Empty response from Gemini Pro")
+            logger.info(f"Raw Gemini response: {response}")
+            if not hasattr(response, 'text') or not response.text:
+                logger.warning("Empty or missing 'text' in response from Gemini Pro")
                 return ""
-                
             logger.info("Successfully generated text with Gemini Pro")
             return response.text
         except Exception as e:
-            logger.error(f"Error generating text with Gemini Pro: {e}")
+            logger.error(f"Error generating text with Gemini Pro: {e}", exc_info=True)
             raise
     
     def retry_with_backoff(

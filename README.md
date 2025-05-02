@@ -436,6 +436,84 @@ A unified script that handles the complete generation and posting flow.
 - Generates a digital art image based on the AI-derived prompt using `image_generator.py`
 - Posts both the story and image to Twitter using `twitter_client.py`
 
+## Prompt Generation Flow
+
+The AI Solarpunk Story Bot uses a two-stage prompt generation process to create both the story and the matching image:
+
+### 1. Story Prompt Construction
+
+The story prompt is dynamically built based on the selected environmental setting and theme. The prompt ensures the story is positive, hopeful, and fits within Twitter's character limit.
+
+**Prompt Template:**
+```
+Write a solarpunk micro-story set in a {setting} environment. Theme: {theme}. The story must be positive, hopeful, and fit within {max_chars} characters. It should be suitable for a Twitter post.
+```
+
+**Example:**
+```
+Write a solarpunk micro-story set in a mountain environment. Theme: sustainability. The story must be positive, hopeful, and fit within 280 characters. It should be suitable for a Twitter post.
+```
+
+This prompt is sent to the OpenAI o3 model (or Gemini Pro, depending on configuration) to generate the story.
+
+---
+
+### 2. Image Prompt Construction
+
+After the story is generated, a second prompt is constructed to extract key visual elements from the story for image generation. This uses a system prompt and a user prompt, combined and sent to the LLM to create a concise, descriptive image prompt.
+
+**System Prompt:**
+```
+You are an AI assistant helping to extract visual elements from a solarpunk micro-story to create an image prompt. Focus on:
+1. The setting and environment
+2. Key visual elements and objects
+3. The overall mood and atmosphere
+4. Colors, lighting, and time of day
+5. Any distinctive architectural or technological features
+
+Create a concise, descriptive prompt that captures the visual essence of the story.
+The prompt should work well for digital art generation.
+```
+
+**User Prompt:**
+```
+Here is a solarpunk micro-story:
+
+{story}
+
+Extract the key visual elements and create a concise image generation prompt that captures the essence of this story. The prompt should be suitable for generating a digital art illustration.
+```
+
+**Combined Example:**
+```
+You are an AI assistant helping to extract visual elements from a solarpunk micro-story to create an image prompt. Focus on:
+1. The setting and environment
+2. Key visual elements and objects
+3. The overall mood and atmosphere
+4. Colors, lighting, and time of day
+5. Any distinctive architectural or technological features
+
+Create a concise, descriptive prompt that captures the visual essence of the story.
+The prompt should work well for digital art generation.
+
+Here is a solarpunk micro-story:
+
+Alpine sunrise paints the terraced solar petals above Cloudhaven. Children glide on wind-lifted bikes, delivering seedpods to cliff gardens. Every harvest feeds the hydro battery below, every smile powers the next dawn. In these mountains, we grow tomorrow.
+
+Extract the key visual elements and create a concise image generation prompt that captures the essence of this story. The prompt should be suitable for generating a digital art illustration.
+```
+
+The resulting image prompt is then sent to the image generation model (e.g., DALL-E 3 or Imagen 2) to create the artwork.
+
+---
+
+**Summary Flow:**
+1. **Build story prompt** (with setting, theme, char limit) → Generate story.
+2. **Build image prompt** (system + user prompt, using the story) → Generate image prompt.
+3. **Send image prompt** (plus style/setting) to image model → Generate image.
+
+This approach ensures that each image is closely tied to the narrative and mood of the generated story.
+
 ## Usage
 
 ### Using the Bot Manager (Recommended)

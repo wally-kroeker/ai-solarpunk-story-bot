@@ -1,3 +1,41 @@
+# Solarpunk Story Bot - Believability & Tech Focus Overhaul (2024-04 v2)
+
+## Implementation Plan
+
+### Phase 1: Data Structure Updates
+- [x] Update SETTINGS list with new environments (wetland, grassland, reef, etc.)
+- [x] Update THEMES dictionary with new settings and their themes
+- [x] Add X_THEMES (cross-cutting themes) as a new constant
+- [x] Update ART_STYLES dictionary with new styles and descriptive modifiers
+
+### Phase 2: Randomization & Story Generation Logic (Updates)
+- [x] Implement new randomization rules for settings, styles, and secondary themes (with specified probabilities)
+- [x] Update StoryParameters to support secondary theme
+- [x] Update story prompt construction to append secondary theme when present
+- [x] **Modify theme selection:** Before calling `generate_story`, explicitly choose *one* `primary_tech` from `THEMES[setting]` list. Store this `primary_tech`.
+- [x] **Update StoryParameters/Prompt:** Ensure `generate_story` and its parameters/prompt reflect focus on a single `primary_tech`.
+
+### Phase 3: Believability Check & Regeneration (New)
+- [x] **Implement believability_check function:** Use LLM call to get 1-9 realism score; return True if >= 7.
+- [x] **Implement Regeneration Loop:** In `run_generation`, loop `generate_story` up to 3 times, breaking if `believability_check` passes. Use last story if loop finishes.
+
+### Phase 4: Image Prompt Extraction & Construction (Updates)
+- [x] Redesign `extract_image_prompt` to request and parse structured JSON output
+- [x] Add validation and default injection for 'negatives' field
+- [x] **Update `extract_image_prompt`:** Require `tech` field in JSON. Accept `primary_tech` as argument and ensure it's in the output dict.
+- [x] **Update Image Prompt Construction:** Use new f-string format including `featuring {tech}`.
+
+### Phase 5: Seed Deduplication (Updates)
+- [x] Implement recent seed deduplication using deque(maxlen=10)
+- [x] **Update Seed Definition:** Change seed tuple to `(setting, primary_tech, secondary_theme, style)`.
+
+### Phase 6: Testing & Validation (Updates)
+- [ ] Add/expand unit tests for `believability_check` and updated logic.
+- [ ] Run integration tests to verify regeneration, tech inclusion in prompts, and plausibility.
+- [ ] Manually review sample outputs for quality and coherence.
+
+---
+
 # AI Agent Task List
 
 ## Phase 1: Project Setup and Infrastructure
@@ -185,6 +223,15 @@
         - Verified service operation
         - Confirmed logging system works
 
+### 2.5 Unified LLM-Based Image Prompt Construction
+- [x] Refactor image prompt construction to always use LLM (OpenAI o3) for extracting image prompts from stories
+      - All programmatic and Gemini/Imagen logic removed from story and image generation modules
+      - Only OpenAI o3 is used for both story and image generation
+      - Error notification stub added for image prompt failures
+      - Full pipeline tested with `uv run src/ai_story_tweet_generator.py --setting urban --style digital-art --features story,image --preview`
+      - Confirmed successful story, prompt, and image generation with OpenAI only
+      - All outputs and logs verified
+
 ## Phase 3: Testing and Quality Assurance
 
 ### 3.1 Unit Testing
@@ -234,167 +281,30 @@
 - [ ] Create backup system
 - [ ] Set up production environment
 
-## Maintenance Tasks
+## Phase 6: OpenAI Provider Migration
 
-### Daily Tasks
-- [ ] Monitor error logs
-- [ ] Check API rate limits
-- [ ] Verify posting schedule
-- [ ] Review content quality
-- [ ] Check system health
+### 6.1 Discovery & Baseline
+- [ ] Catalogue all Gemini Pro and Imagen 2 references across the codebase and produce a short report
+- [ ] Audit current unit and integration tests to identify provider-specific fixtures or mocks
 
-### Weekly Tasks
-- [ ] Review performance metrics
-- [ ] Update prompt templates
-- [ ] Clean up logs
-- [ ] Check for API updates
-- [ ] Review error patterns
+### 6.2 OpenAI Client Layer (non-breaking)
+- [x] Add `openai~=1.3` to `pyproject.toml` using `uv pip install --strict`
+- [x] Implement `src/ai_solarpunk/clients/openai_story_client.py` with `generate_story()`
+- [x] Implement `src/ai_solarpunk/clients/openai_image_client.py` with `generate_image()`
+- [x] Write unit tests for both new clients in `tests/clients/`
+- [x] Document new environment variables (`OPENAI_API_KEY`, `OPENAI_API_BASE`, `OPENAI_HTTP_TIMEOUT`) in `docs/` and `.env.sample`
 
-### Monthly Tasks
-- [ ] Update dependencies
-- [ ] Review and optimize prompts
-- [ ] Analyze content performance
-- [ ] Update documentation
-- [ ] Review security measures
+      - OpenAI Python SDK added and locked in pyproject.toml
+      - New async, typed, logged, and retried story/image client modules created
+      - Full pytest test suites for both clients, using pytest-asyncio and pytest-mock
+      - All tests pass (core logic, error, and retry)
+      - Manual .env update for API key
 
-## Emergency Procedures
+### 6.3 Generation Pipeline Integration
+- [ ] Introduce `USE_OPENAI` feature flag (default `false` during transition)
+- [ ] Modify existing story and image services to delegate to OpenAI clients when the flag is enabled
+- [ ] Update or create tests to cover flag switching and ensure backward compatibility
 
-### System Failures
-- [ ] Implement automatic retry system
-- [ ] Create fallback posting mechanism
-- [ ] Set up alert system
-- [ ] Create recovery procedures
-- [ ] Document emergency contacts
-
-### Content Issues
-- [ ] Implement content filtering
-- [ ] Create content review system
-- [ ] Set up user feedback handling
-- [ ] Create content backup system
-- [ ] Document content guidelines
-
-## Completed Tasks
-
-### Service Migration
-- [x] Remove cron-specific components
-- [x] Create systemd service configuration
-- [x] Implement service management interface
-- [x] Add timezone support with DST handling
-- [x] Create bot-manager.sh script
-- [x] Test and verify service operation
-- [x] Add logging system
-- [x] Implement schedule management
-- [x] Add manual trigger functionality
-
-### Bot Manager Features
-- [x] Service status monitoring
-- [x] Schedule management interface
-- [x] Timezone configuration
-- [x] Log viewing system
-- [x] Manual service execution
-- [x] Service testing tools
-
-## Outstanding Issues
-
-### Preview System
-- [x] Fix preview generation in bot-manager.sh
-  - Preview function now correctly displays generated content
-  - Image saving/display functionality fixed
-  - Integration between Python script and shell interface improved
-
-### Future Enhancements
-- [ ] Add more image generation styles
-- [ ] Implement backup/restore functionality
-- [ ] Add analytics tracking
-- [ ] Create web interface
-- [ ] Add more customization options
-
-## Feature Compatibility Implementation Plan
-
-### Pre-implementation Tasks
-- [x] Update git repository with latest changes
-- [x] Create a new feature branch for compatibility changes
-      - Use `git checkout -b feature/bot-manager-compatibility`
-
-### Content Management Features
-- [x] Implement view_recent_activity function
-      - Add ability to view recent posts, images, and previews
-      - Include functionality to examine detailed post information
-      - Add option to post from previews
-- [x] Add cleanup_outputs function 
-      - Support archiving of stories, images, and previews
-      - Include options for different retention periods
-      - Ensure backward compatibility with existing files
-- [x] Implement clear_preview_files function
-      - Add dedicated option for managing preview files
-      - Include archiving capability before deletion
-- [ ] Add advanced generation options
-      - Implement feature selection system (story/image/post)
-      - Add parameterized generation controls
-      - Support custom settings and styles
-
-### Enhanced Preview Functionality
-- [x] Improve preview_story_and_image function
-      - Added side-by-side display of story and image
-      - Implemented terminal image display using timg
-      - Added proper terminal sizing detection
-- [x] Add post_preview function
-      - Enabled posting of previously generated content
-      - Added option to examine previews before posting
-      - Implemented proper error handling for posting process
-
-### System Status Features
-- [ ] Implement check_system_status function
-      - Add comprehensive verification of system components
-      - Check for necessary directories and files
-      - Verify credentials and permissions
-- [ ] Add systemd diagnostics
-      - Create functions for checking service status
-      - Add timer verification functionality
-      - Include user-friendly service debugging tools
-
-### UI Improvements
-- [ ] Enhance header display and menu structure
-      - Maintain consistent visual styling across functions
-      - Ensure color usage is consistent
-      - Add improved menu navigation
-- [ ] Add detailed information displays
-      - Implement consistent color-coding system
-      - Show comprehensive timezone information
-      - Add service status visualization
-
-### Testing
-- [ ] Test each added feature with systemd architecture
-      - Verify all functions work correctly with service-based scheduling
-      - Ensure proper logging in service context
-      - Confirm timezone handling works with systemd timers
-- [ ] Verify backward compatibility
-      - Test with existing configurations
-      - Ensure all data files are handled correctly
-      - Validate timezone configuration compatibility
-
-## Implementation Notes
-
-### Service Management
-- Successfully migrated from cron to systemd
-- Added comprehensive timezone support with DST handling
-- Implemented proper logging and monitoring
-- Created user-friendly management interface
-
-### Bot Manager
-- Created unified interface for all bot operations
-- Added support for manual and scheduled operations
-- Implemented timezone-aware scheduling
-- Added comprehensive logging system
-- Fixed time parsing issue with morning hours (08:XX format) to prevent octal interpretation errors
-
-### Known Issues
-1. Preview generation needs fixing in bot-manager.sh
-2. Image display functionality needs improvement
-3. Some UI/UX improvements needed for better user feedback
-
-### Next Steps
-1. Fix preview generation system
-2. Add more error handling and user feedback
-3. Implement additional customization options
-4. Consider adding a web interface 
+### 6.4 Systemd & Shell Updates
+- [ ] Update `ai-solarpunk-story.service` to include OpenAI-specific environment variables and set `USE_OPENAI=true`
+- [ ] Update `
