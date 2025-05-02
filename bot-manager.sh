@@ -336,28 +336,55 @@ preview_story_and_image() {
         if command -v jq &> /dev/null; then
             # Get the list of stories
             local stories_count=$(jq '.stories | length' "$candidates_file")
+            local chosen_idx=$(jq -r '.selected_index' "$candidates_file")
+            
+            echo -e "${CYAN}======= All Story Candidates =======${NC}\n"
             
             for ((i=0; i<$stories_count; i++)); do
-                echo -e "${YELLOW}Candidate $((i+1)):${NC}"
-                jq -r ".stories[$i]" "$candidates_file" | fold -s -w 80
-                echo -e "\n"
+                if [ "$i" -eq "$chosen_idx" ]; then
+                    # Highlight the chosen story with a different color and indicator
+                    echo -e "${GREEN}★ SELECTED - Candidate $((i+1)) ★${NC}"
+                    echo -e "${GREEN}$(jq -r ".stories[$i]" "$candidates_file" | fold -s -w 80)${NC}"
+                    echo -e "\n"
+                else
+                    echo -e "${YELLOW}Candidate $((i+1)):${NC}"
+                    jq -r ".stories[$i]" "$candidates_file" | fold -s -w 80
+                    echo -e "\n"
+                fi
             done
             
-            # Get the chosen story and reasons
-            echo -e "${CYAN}======= Selected Story =======${NC}\n"
-            local chosen_idx=$(jq -r '.selected_index' "$candidates_file")
-            local chosen_story=$(jq -r ".stories[$chosen_idx]" "$candidates_file")
+            # Get the selection reasons
+            echo -e "${CYAN}======= Selection Reasoning =======${NC}\n"
             local selection_reasons=$(jq -r '.selection_reasons' "$candidates_file")
             
-            echo -e "${GREEN}The selected story was candidate #$((chosen_idx+1)):${NC}"
-            echo -e "${BLUE}$chosen_story${NC}"
-            echo -e "\n${YELLOW}Reasons for selection:${NC}"
+            echo -e "${YELLOW}Reasons why Candidate #$((chosen_idx+1)) was selected:${NC}"
             echo -e "$selection_reasons" | fold -s -w 80
         else
             # Fallback if jq is not installed - parse manually
             echo -e "${YELLOW}jq is not installed. Basic display only.${NC}"
-            cat "$candidates_file" | grep -A 2 "Candidate"
-            echo -e "\n${YELLOW}Selected story:${NC}"
+            echo -e "${RED}For best experience, please install jq with: sudo apt install jq${NC}"
+            
+            # Try a basic approach to show the stories
+            local line_num=1
+            local current_story=""
+            local in_story=0
+            
+            # Read the candidates file line by line to extract stories
+            while IFS= read -r line; do
+                if [[ $line == *"STORY"* || $line == *"Candidate"* ]]; then
+                    if [ $in_story -eq 1 ]; then
+                        echo -e "$current_story\n"
+                        current_story=""
+                    fi
+                    echo -e "${YELLOW}$line${NC}"
+                    in_story=1
+                elif [ $in_story -eq 1 ]; then
+                    current_story+="$line\n"
+                fi
+            done < <(cat "$candidates_file" | grep -A2 -B1 "Candidate\|STORY\|selected_story")
+            
+            # Show the selected story at the end
+            echo -e "\n${GREEN}Selected story:${NC}"
             cat "$story_file"
         fi
         
