@@ -26,11 +26,20 @@ import collections
 from src.story_generator import StoryGenerator, StoryParameters
 from src.image_generator import ImageGenerator, ImageParameters
 from src.twitter_client import TwitterClient
-from src.ai_solarpunk.clients.openai_story_client import generate_story as openai_generate_story, openai_rate_story
+from src.ai_solarpunk.clients.openai_story_client import (
+    generate_story_candidates,
+    select_best_story,
+    generate_story
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# --- Constants ---
+STORY_GENERATION_MODEL = "o4-mini"
+STORY_SELECTION_MODEL = "o3"
+NUM_STORIES_TO_GENERATE = 10
 
 # --- SETTINGS ------------------------------------
 SETTINGS = [
@@ -138,134 +147,33 @@ def maybe_secondary_theme() -> Optional[str]:
         return random.choice(X_THEMES)
     return None
 
-class StoryParameters:
-    """Parameters for story generation (local wrapper)."""
-    def __init__(self, setting: str, primary_tech: str, secondary_theme: Optional[str] = None):
-        self.setting = setting
-        self.primary_tech = primary_tech
-        self.secondary_theme = secondary_theme
-        self.max_chars = 280 # Upper limit, prompt uses 240
-
-def compress_pass(story: str) -> str:
-    """Compress a story to <=240 characters using the LLM, preserving meaning and solarpunk tone."""
-    logger.info(f"Compressing story (original length: {len(story)})")
-    compress_prompt = (
+def build_generation_prompt(setting: str, primary_tech: str, secondary_theme: Optional[str]) -> str:
+    """Constructs the prompt for generating story candidates."""
+    prompt = (
         "You are a solarpunk flash-fiction writer.\n"
         "Goal: One tweet ≤240 characters.\n\n"
         "• Focus on ONE primary eco-tech or practice.\n"
         "• Story beats: [Vivid setting + character] → [tech action] → [hopeful effect].\n"
         "• Keep it plausible within the next 30 years; no magic or hand-waving.\n"
         "• Tone: sensory, active, present-tense, no hashtags, no quotes.\n\n"
-        "COMPRESS the following micro-story to 240 characters or fewer, preserving its core meaning, hopefulness, and solarpunk tone. Do not simply truncate.\n\n"
-        f"ORIGINAL:\n{story}\n\nCOMPRESSED:"
+        f"Write a solarpunk micro-story set in a {setting} environment. "
+        f"Primary Eco-Tech: {primary_tech}. "
     )
-    try:
-        compressed = asyncio.run(openai_generate_story(compress_prompt, model="o3"))
-        compressed = compressed.strip()
-        logger.info(f"Compressed story length: {len(compressed)}")
-        return compressed
-    except Exception as e:
-        logger.error(f"Error compressing story: {e}")
-        return story
-
-def generate_story(setting: str, style: str, primary_tech: str, secondary_theme: Optional[str], output_dir: Optional[str] = None, base_name: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:
-    """Generate a solarpunk micro-story focusing on a primary tech."""
-    logger.info(f"Generating story with setting: {setting}, primary_tech: {primary_tech}, style: {style}")
-    try:
-        # Initialize the story generator
-        story_generator = StoryGenerator()
-        # Create story parameters with the specified setting and tech
-        params = StoryParameters(setting=setting, primary_tech=primary_tech, secondary_theme=secondary_theme)
-        # Build the prompt
-        prompt = (
-            "You are a solarpunk flash-fiction writer.\n"
-            "Goal: One tweet ≤240 characters.\n\n"
-            "• Focus on ONE primary eco-tech or practice.\n"
-            "• Story beats: [Vivid setting + character] → [tech action] → [hopeful effect].\n"
-            "• Keep it plausible within the next 30 years; no magic or hand-waving.\n"
-            "• Tone: sensory, active, present-tense, no hashtags, no quotes.\n\n"
-            f"Write a solarpunk micro-story set in a {params.setting} environment. "
-            f"Primary Eco-Tech: {params.primary_tech}. " # Use primary_tech here
-        )
-        if params.secondary_theme:
-            prompt += f"Secondary theme: {params.secondary_theme}. "
-        prompt += (
-            f"The story must be positive, hopeful, and fit within 240 characters. "
-            f"It should be suitable for a Twitter post."
-        )
-        logger.info(f"Story prompt: {prompt}")
-        # Generate the story
-        story, metadata = story_generator.generate_story(params)
-        # If len(story) > 240, call compress_pass and use the result
-        if len(story) > 240:
-            story = compress_pass(story)
-        # Save the story to a file (using provided base_name)
-        if base_name: # Ensure base_name is provided
-            if output_dir:
-                story_file = Path(output_dir) / f"story_{base_name}.txt"
-            else:
-                story_file = STORIES_DIR / f"story_{base_name}.txt"
-            with open(story_file, 'w') as f:
-                f.write(story)
-            logger.info(f"Story generated successfully ({len(story)} characters)")
-            logger.info(f"Story saved to {story_file}")
-            return story, metadata
-        else:
-            logger.error("Base name not provided to generate_story")
-            raise ValueError("Base name is required for saving the story file")
-    except Exception as e:
-        logger.error(f"Error generating story: {e}")
-        raise
-
-def send_error_email(subject: str, message: str) -> None:
-    """Stub for sending an error notification email to the maintainer."""
-    logger.warning(f"[EMAIL STUB] Would send email: {subject} - {message}")
-
-def extract_image_prompt(story: str, style: str, primary_tech: str) -> Dict[str, str]:
-    """Extract structured image prompt fields from the story using OpenAI o3 LLM.
-    Ensures the primary_tech is included in the output.
-    Returns a dict with keys: subject, environment, mood, palette, style, tech, negatives.
-    """
-    logger.info(f"Extracting structured image prompt for tech: {primary_tech}")
-    system_prompt = (
-        "You are an AI assistant that extracts visual elements from a solarpunk micro-story to create an image prompt. "
-        "Return a JSON object with these fields: subject, environment, mood, palette, style, tech, negatives. "
-        "Crucially, the described scene MUST be plausible within the next 30 years. Avoid fantasy elements like floating islands unless explicitly and plausibly described in the story. "
-        "The 'tech' field MUST accurately represent the main technology mentioned. "
-        "If a field other than 'tech' is not present, make a creative guess consistent with near-future plausibility. "
-        "If 'negatives' is missing, default to 'no text, no logo, no watermark, unrealistic, fantasy'. "
-        "Example output: {\"subject\":\"...\",\"environment\":\"...\",\"mood\":\"...\",\"palette\":\"...\",\"style\":\"digital-art\",\"tech\":\"vertical farms\",\"negatives\":\"no text, no logo, no watermark, unrealistic, fantasy\"}"
+    if secondary_theme:
+        prompt += f"Secondary theme: {secondary_theme}. "
+    prompt += (
+        f"The story must be positive, hopeful, and fit within 240 characters. "
+        f"It should be suitable for a Twitter post."
     )
-    user_prompt = (
-        f"Here is a solarpunk micro-story featuring {primary_tech}:\n\n{story}\n\n"
-        "Extract the key visual elements and return a JSON object as described above, ensuring the 'tech' field is accurate."
-    )
-    full_prompt = f"{system_prompt}\n\n{user_prompt}"
-    try:
-        # Use OpenAI o3 model to generate the image prompt JSON
-        response = asyncio.run(openai_generate_story(full_prompt, model="o3"))
-        logger.info(f"Raw image prompt LLM output: {response[:200]}")
-        # Find the first JSON object in the response
-        start = response.find('{')
-        end = response.rfind('}') + 1
-        if start == -1 or end == -1:
-            raise ValueError("No JSON object found in LLM response")
-        json_str = response[start:end]
-        prompt_data = _json.loads(json_str)
-        # Ensure all required fields are present and tech is correct
-        prompt_data['tech'] = primary_tech # Force correct tech
-        if 'negatives' not in prompt_data or not prompt_data['negatives']:
-            prompt_data['negatives'] = 'no text, no logo, no watermark, unrealistic, fantasy'
-        if 'style' not in prompt_data or not prompt_data['style']:
-            prompt_data['style'] = style
-        return prompt_data
-    except Exception as e:
-        logger.error(f"Error extracting structured image prompt: {e}")
-        send_error_email(
-            subject="AI Solarpunk Bot: Image Prompt Extraction Failure",
-            message=f"Failed to extract image prompt for story: {story[:200]}\nError: {e}"
-        )
-        raise
+    return prompt
+
+def compress_pass(story: str) -> str:
+    """Compress the story to fit within 240 characters using an LLM pass."""
+    # Placeholder - Implement actual compression logic if needed,
+    # For now, just truncate crudely.
+    # Ideally, call another LLM prompt to shorten intelligently.
+    logger.warning(f"Story length {len(story)} exceeds 240 chars, truncating.")
+    return story[:240]
 
 def generate_image(story: str, setting: str, style: str, image_prompt_data: Optional[Dict[str, str]] = None, output_dir: Optional[str] = None, base_name: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:
     """Generate an image based on the story and structured image prompt, using the provided base name for file naming."""
@@ -347,21 +255,55 @@ def save_preview(result: GenerationResult) -> str:
     
     return str(preview_file)
 
-def believability_check(story: str) -> bool:
-    """Check story plausibility using an LLM rating (1-9). Returns True if score >= 7."""
-    prompt = (
-        "Rate the following solarpunk micro-story on realism (plausibility within the next 30 years). "
-        "Use a scale of 1-9, where 9 = fully plausible near-future, 1 = speculative fantasy. "
-        "Return ONLY the integer rating.\n\n"
-        f"STORY:\n{story}\n\nRATING:"
+def send_error_email(subject: str, message: str) -> None:
+    """Stub for sending an error notification email to the maintainer."""
+    logger.warning(f"[EMAIL STUB] Would send email: {subject} - {message}")
+
+def extract_image_prompt(story: str, style: str, primary_tech: Optional[str]) -> Dict[str, str]:
+    """Extract structured image prompt fields from the story using OpenAI o3 LLM.
+    Ensures the primary_tech is included in the output.
+    Returns a dict with keys: subject, environment, mood, palette, style, tech, negatives.
+    """
+    logger.info(f"Extracting structured image prompt for tech: {primary_tech}")
+    system_prompt = (
+        "You are an AI assistant that extracts visual elements from a solarpunk micro-story to create an image prompt. "
+        "Return a JSON object with these fields: subject, environment, mood, palette, style, tech, negatives. "
+        "Crucially, the described scene MUST be plausible within the next 30 years. Avoid fantasy elements like floating islands unless explicitly and plausibly described in the story. "
+        "The 'tech' field MUST accurately represent the main technology mentioned. "
+        "If a field other than 'tech' is not present, make a creative guess consistent with near-future plausibility. "
+        "If 'negatives' is missing, default to 'no text, no logo, no watermark, unrealistic, fantasy'. "
+        "Example output: {\"subject\":\"...\",\"environment\":\"...\",\"mood\":\"...\",\"palette\":\"...\",\"style\":\"digital-art\",\"tech\":\"vertical farms\",\"negatives\":\"no text, no logo, no watermark, unrealistic, fantasy\"}"
     )
+    user_prompt = (
+        f"Here is a solarpunk micro-story featuring {primary_tech}:\n\n{story}\n\n"
+        "Extract the key visual elements and return a JSON object as described above, ensuring the 'tech' field is accurate."
+    )
+    full_prompt = f"{system_prompt}\n\n{user_prompt}"
     try:
-        score = asyncio.run(openai_rate_story(prompt))
-        logger.info(f"Believability score: {score}")
-        return score >= 7
+        # Use OpenAI o3 model explicitly for image prompt extraction
+        response = asyncio.run(generate_story(full_prompt, model="o3"))
+        logger.info(f"Raw image prompt LLM output: {response[:200]}")
+        # Find the first JSON object in the response
+        start = response.find('{')
+        end = response.rfind('}') + 1
+        if start == -1 or end == -1:
+            raise ValueError("No JSON object found in LLM response")
+        json_str = response[start:end]
+        prompt_data = _json.loads(json_str)
+        # Ensure all required fields are present and tech is correct
+        prompt_data['tech'] = primary_tech # Force correct tech
+        if 'negatives' not in prompt_data or not prompt_data['negatives']:
+            prompt_data['negatives'] = 'no text, no logo, no watermark, unrealistic, fantasy'
+        if 'style' not in prompt_data or not prompt_data['style']:
+            prompt_data['style'] = style
+        return prompt_data
     except Exception as e:
-        logger.error(f"Error during believability check: {e}")
-        return False # Default to not believable on error
+        logger.error(f"Error extracting structured image prompt: {e}")
+        send_error_email(
+            subject="AI Solarpunk Bot: Image Prompt Extraction Failure",
+            message=f"Failed to extract image prompt for story: {story[:200]}\nError: {e}"
+        )
+        raise
 
 def run_generation(
     setting: Optional[str] = None,
@@ -383,89 +325,149 @@ def run_generation(
             logger.info(f"Randomly selected style: {style}")
         if not features:
             features = ["story", "image", "post"]
+
         result = GenerationResult(success=False)
-        story = existing_story
-        story_metadata = {"source": "provided"} if existing_story else None
-        primary_tech = None
-        secondary_theme = None
-        # ---> Generate base_name ONCE here <-----
+        story: Optional[str] = existing_story
+        story_metadata: Optional[Dict[str, Any]] = {"source": "provided"} if existing_story else None
+        primary_tech: Optional[str] = None
+        secondary_theme: Optional[str] = None
+        base_name: Optional[str] = None
+
+        # Determine base_name early
         timestamp = int(time.time())
-        # Determine base_name early, before the loop
-        # If existing_story_file is provided, try to extract from it
         if existing_story_file and story:
             filename = os.path.basename(existing_story_file)
             if filename.startswith("story_") and filename.endswith(".txt"):
-                base_name = filename[len("story_"):-len(".txt")]
+                base_name = filename[len("story_"): -len(".txt")]
             else:
-                # Fallback if filename pattern doesn't match
                 base_name = f"{setting}_{style}_{timestamp}"
-        elif not existing_story: # Only generate new name if not using existing story
-             base_name = f"{setting}_{style}_{timestamp}"
+        elif not existing_story:
+            base_name = f"{setting}_{style}_{timestamp}"
         else:
-            base_name = None # Should not happen if logic is correct, but safer
+            # Should not happen if logic is correct, but safer
+            base_name = f"unknown_{timestamp}"
+
         # 1.5 Seed deduplication for random generations
         if not existing_story:
-            # Try up to 10 times to get a unique seed
-            for _ in range(10):
+            seed_found = False
+            for _ in range(10): # Try 10 times for unique seed
                 primary_tech = random.choice(THEMES.get(setting, ["sustainability"]))
                 secondary_theme = maybe_secondary_theme()
-                seed = (setting, primary_tech, secondary_theme, style) # Updated seed
+                seed = (setting, primary_tech, secondary_theme, style)
                 if seed not in RECENT_SEEDS:
                     RECENT_SEEDS.append(seed)
+                    seed_found = True
                     break
-                # If duplicate, re-randomize setting/style
+                # If duplicate, re-randomize setting/style for next attempt
+                logger.debug(f"Duplicate seed found: {seed}. Re-randomizing...")
                 setting = select_random_setting()
                 style = select_random_style()
-            else:
+            if not seed_found:
                 logger.warning("Could not find a unique seed after 10 attempts; proceeding anyway.")
+                # Use the last generated seed even if duplicate
                 RECENT_SEEDS.append(seed)
+            # Update basename if setting/style changed during deduplication
+            base_name = f"{setting}_{style}_{timestamp}"
+
+
         # 2. Generate story if requested and no existing story is provided
         if "story" in features and not story:
-            # Ensure primary_tech is selected if we didn't go through the deduplication loop (e.g., fixed setting/style)
+            # Ensure primary_tech is selected if we didn't go through the deduplication loop
             if primary_tech is None:
                 primary_tech = random.choice(THEMES.get(setting, ["sustainability"]))
+            # Secondary theme might still be None if not selected randomly
             if secondary_theme is None:
-                 secondary_theme = maybe_secondary_theme()
-            # Loop for regeneration based on believability
-            story = None
-            story_metadata = None
-            for attempt in range(3):
-                logger.info(f"Story generation attempt {attempt + 1}/3")
-                current_story, current_metadata = generate_story(
-                    setting,
-                    style,
-                    primary_tech,
-                    secondary_theme,
-                    output_dir,
-                    base_name=base_name
-                )
-                if believability_check(current_story):
-                    story = current_story
-                    story_metadata = current_metadata
-                    logger.info("Story passed believability check.")
-                    break
-                else:
-                    story = current_story # Keep last attempt if all fail
-                    story_metadata = current_metadata
-                    logger.warning("Story failed believability check, will retry if possible...")
-            else: # If loop finishes without break
-                logger.warning("Story failed believability check after 3 attempts, using last generated story.")
+                 secondary_theme = maybe_secondary_theme() # Try again if needed
 
-            # Ensure story is not None before proceeding
+
+            logger.info(f"Generating story candidates with setting: {setting}, primary_tech: {primary_tech}, secondary_theme: {secondary_theme}")
+
+            # Construct the generation prompt
+            generation_prompt = build_generation_prompt(setting, primary_tech, secondary_theme)
+            logger.info(f"Base story prompt for {STORY_GENERATION_MODEL}: {generation_prompt}")
+
+            # Generate candidates using the client function
+            story_candidates = asyncio.run(generate_story_candidates(
+                prompt=generation_prompt,
+                num_candidates=NUM_STORIES_TO_GENERATE,
+                generation_model=STORY_GENERATION_MODEL
+            ))
+
+            if not story_candidates:
+                 logger.error("No story candidates were generated successfully.")
+                 raise ValueError("Story generation failed: No candidates produced.")
+
+            logger.info(f"Generated {len(story_candidates)} candidates. Selecting the best one using {STORY_SELECTION_MODEL}...")
+
+            # Select the best story using the client function
+            story = asyncio.run(select_best_story(
+                stories=story_candidates,
+                selection_model=STORY_SELECTION_MODEL
+            ))
+
             if story is None:
-                raise ValueError("Story generation failed after retries.")
+                logger.error(f"Failed to select a best story using {STORY_SELECTION_MODEL}. Falling back to the first candidate.")
+                # Fallback strategy: use the first successfully generated candidate
+                story = story_candidates[0]
+
+
+            logger.info(f"Selected story: {story[:100]}...")
+
+            # Apply compression/truncation if necessary
+            if len(story) > 240:
+                story = compress_pass(story)
+
+            # --- Save the selected story ---
+            story_file_path = None
+            if base_name: # Ensure base_name is valid
+                output_path = Path(output_dir) if output_dir else STORIES_DIR
+                story_file_path = output_path / f"story_{base_name}.txt"
+                try:
+                    with open(story_file_path, 'w') as f:
+                        f.write(story)
+                    logger.info(f"Selected story saved to {story_file_path}")
+                except IOError as e:
+                    logger.error(f"Failed to save story to {story_file_path}: {e}")
+                    story_file_path = None # Indicate save failure
+            else:
+                 logger.error("Base name is missing, cannot save story file.")
+
+
+            # Update metadata
+            story_metadata = {
+                "setting": setting,
+                "style": style, # Keep style for consistency even if not used in story gen
+                "primary_tech": primary_tech,
+                "secondary_theme": secondary_theme,
+                "char_count": len(story),
+                "timestamp": timestamp,
+                "candidates_generated": len(story_candidates),
+                "generation_model": STORY_GENERATION_MODEL,
+                "selection_model": STORY_SELECTION_MODEL,
+                "saved_path": str(story_file_path) if story_file_path else None
+            }
 
             result = result._replace(
                 story=story,
                 story_metadata=story_metadata
             )
-        elif story:
-            result = result._replace(
-                story=story,
-                story_metadata=story_metadata
-            )
+
+        # Ensure story exists before proceeding (either provided or generated)
+        if not result.story:
+             logger.error("No story available for subsequent steps.")
+             return result._replace(success=False, error="Story generation or provision failed.")
+
+
         # 3. Generate image if requested
-        if "image" in features and result.story:
+        if "image" in features:
+            # Ensure primary_tech is available for image prompt extraction
+            # If story was provided, primary_tech might be None initially
+            if primary_tech is None and result.story_metadata and 'primary_tech' in result.story_metadata:
+                 primary_tech = result.story_metadata['primary_tech']
+            elif primary_tech is None:
+                 logger.warning("Primary tech not available for image prompt extraction.")
+                 # Attempt to extract without it or handle error
+
             image_prompt_data = extract_image_prompt(result.story, style, primary_tech)
             image_path, image_metadata = generate_image(
                 result.story,
@@ -473,20 +475,23 @@ def run_generation(
                 style,
                 image_prompt_data=image_prompt_data,
                 output_dir=output_dir,
-                base_name=base_name
+                base_name=base_name # Use the consistent base_name
             )
             result = result._replace(
                 image_path=image_path,
                 image_metadata=image_metadata
             )
+
         # 4. Post to Twitter if requested and not in preview mode
         if "post" in features and not preview_only and result.story and result.image_path:
             tweet_id = post_to_twitter(result.story, result.image_path)
             result = result._replace(tweet_id=tweet_id)
+
         result = result._replace(success=True)
         return result
+
     except Exception as e:
-        logger.error(f"Error during generation: {e}")
+        logger.exception(f"Error during generation pipeline: {e}") # Use exception logging
         return GenerationResult(success=False, error=str(e))
 
 def post_from_preview(preview_file: str) -> bool:

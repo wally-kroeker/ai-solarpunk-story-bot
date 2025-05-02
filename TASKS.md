@@ -264,6 +264,7 @@
 - [ ] Create web interface
 - [ ] Implement advanced image processing
 - [ ] Add analytics tracking
+- [x] Update story generation to use o4-mini for generation (10 candidates) and o3 for selection
 
 ## Phase 5: Documentation and Deployment
 
