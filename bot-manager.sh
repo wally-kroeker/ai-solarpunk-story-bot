@@ -291,23 +291,13 @@ preview_story_and_image() {
     mkdir -p "$preview_dir"
     rm -f "$preview_dir"/*
     
-    # Run the generator in preview mode with output to preview directory, capture output
+    # Run the generator only once, generating candidates, saving them, and producing the image
     echo -e "${BLUE}Running generator...${NC}"
-    
-    # First run the generator to just get candidates and save them to a file
     local candidates_file="$preview_dir/candidates.json"
-    uv run src/ai_story_tweet_generator.py --setting "$setting" --style "$style" --features "story" --output-dir "$preview_dir" --save-candidates "$candidates_file" --preview > /dev/null 2>&1
     
-    # Check if candidates file was created
-    if [[ ! -f "$candidates_file" ]]; then
-        echo -e "${RED}Failed to generate or save story candidates.${NC}"
-        read -p "Press Enter to continue..."
-        return
-    fi
-    
-    # Now run the normal preview generation
+    # Generate everything in a single run
     local generator_output
-    generator_output=$(uv run src/ai_story_tweet_generator.py --setting "$setting" --style "$style" --features "story,image" --output-dir "$preview_dir" 2>&1)
+    generator_output=$(uv run src/ai_story_tweet_generator.py --setting "$setting" --style "$style" --features "story,image" --output-dir "$preview_dir" --save-candidates "$candidates_file" 2>&1)
     echo "$generator_output"
     
     # Find the generated story file and extract its base name
@@ -364,7 +354,7 @@ preview_story_and_image() {
             echo -e "\n${YELLOW}Reasons for selection:${NC}"
             echo -e "$selection_reasons" | fold -s -w 80
         else
-            # Fallback if jq is not available - parse manually
+            # Fallback if jq is not installed - parse manually
             echo -e "${YELLOW}jq is not installed. Basic display only.${NC}"
             cat "$candidates_file" | grep -A 2 "Candidate"
             echo -e "\n${YELLOW}Selected story:${NC}"
