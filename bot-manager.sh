@@ -293,6 +293,19 @@ preview_story_and_image() {
     
     # Run the generator in preview mode with output to preview directory, capture output
     echo -e "${BLUE}Running generator...${NC}"
+    
+    # First run the generator to just get candidates and save them to a file
+    local candidates_file="$preview_dir/candidates.json"
+    uv run src/ai_story_tweet_generator.py --setting "$setting" --style "$style" --features "story" --output-dir "$preview_dir" --save-candidates "$candidates_file" --preview > /dev/null 2>&1
+    
+    # Check if candidates file was created
+    if [[ ! -f "$candidates_file" ]]; then
+        echo -e "${RED}Failed to generate or save story candidates.${NC}"
+        read -p "Press Enter to continue..."
+        return
+    fi
+    
+    # Now run the normal preview generation
     local generator_output
     generator_output=$(uv run src/ai_story_tweet_generator.py --setting "$setting" --style "$style" --features "story,image" --output-dir "$preview_dir" 2>&1)
     echo "$generator_output"
@@ -324,6 +337,44 @@ preview_story_and_image() {
         return
     fi
     
+    # Display all story candidates
+    if [[ -f "$candidates_file" ]]; then
+        clear
+        echo -e "${CYAN}======= All Story Candidates =======${NC}\n"
+        
+        # Use jq to parse the JSON file if available
+        if command -v jq &> /dev/null; then
+            # Get the list of stories
+            local stories_count=$(jq '.stories | length' "$candidates_file")
+            
+            for ((i=0; i<$stories_count; i++)); do
+                echo -e "${YELLOW}Candidate $((i+1)):${NC}"
+                jq -r ".stories[$i]" "$candidates_file" | fold -s -w 80
+                echo -e "\n"
+            done
+            
+            # Get the chosen story and reasons
+            echo -e "${CYAN}======= Selected Story =======${NC}\n"
+            local chosen_idx=$(jq -r '.selected_index' "$candidates_file")
+            local chosen_story=$(jq -r ".stories[$chosen_idx]" "$candidates_file")
+            local selection_reasons=$(jq -r '.selection_reasons' "$candidates_file")
+            
+            echo -e "${GREEN}The selected story was candidate #$((chosen_idx+1)):${NC}"
+            echo -e "${BLUE}$chosen_story${NC}"
+            echo -e "\n${YELLOW}Reasons for selection:${NC}"
+            echo -e "$selection_reasons" | fold -s -w 80
+        else
+            # Fallback if jq is not available - parse manually
+            echo -e "${YELLOW}jq is not installed. Basic display only.${NC}"
+            cat "$candidates_file" | grep -A 2 "Candidate"
+            echo -e "\n${YELLOW}Selected story:${NC}"
+            cat "$story_file"
+        fi
+        
+        echo -e "\n${CYAN}=========================================${NC}"
+        read -p "Press Enter to continue to image preview..."
+    fi
+    
     # Display preview
     local term_width=$(tput cols || echo 80)
     local term_height=$(tput lines || echo 24)
@@ -335,7 +386,7 @@ preview_story_and_image() {
     echo -e "${CYAN}======= Solarpunk Story Preview =======${NC}\n"
     local temp_story=$(mktemp)
     fold -s -w "$text_width" "$story_file" > "$temp_story"
-    echo -e "${YELLOW}Story:${NC}\n"
+    echo -e "${YELLOW}Selected Story:${NC}\n"
     cat "$temp_story"
     echo -e "\n"
     echo -e "${YELLOW}Image:${NC}\n"

@@ -29,7 +29,8 @@ from src.twitter_client import TwitterClient
 from src.ai_solarpunk.clients.openai_story_client import (
     generate_story_candidates,
     select_best_story,
-    generate_story
+    generate_story,
+    select_best_story_with_reasons
 )
 
 # Configure logging
@@ -312,7 +313,8 @@ def run_generation(
     preview_only: bool = False,
     output_dir: Optional[str] = None,
     existing_story: Optional[str] = None,
-    existing_story_file: Optional[str] = None
+    existing_story_file: Optional[str] = None,
+    save_candidates_file: Optional[str] = None
 ) -> GenerationResult:
     """Run the complete or partial generation flow based on specified features."""
     try:
@@ -399,11 +401,60 @@ def run_generation(
 
             logger.info(f"Generated {len(story_candidates)} candidates. Selecting the best one using {STORY_SELECTION_MODEL}...")
 
-            # Select the best story using the client function
-            story = asyncio.run(select_best_story(
-                stories=story_candidates,
-                selection_model=STORY_SELECTION_MODEL
-            ))
+            # Variable to store selection reasons
+            selection_reasons = ""
+            
+            # Get selection reasons if we're saving candidates
+            if save_candidates_file:
+                # Call a special version of select_best_story that returns both the story and reasons
+                selection_result = asyncio.run(select_best_story_with_reasons(
+                    stories=story_candidates,
+                    selection_model=STORY_SELECTION_MODEL
+                ))
+                
+                if selection_result and isinstance(selection_result, tuple) and len(selection_result) == 3:
+                    story, selection_reasons, selected_index = selection_result
+                else:
+                    logger.error(f"Failed to get selection with reasons. Falling back to standard selection.")
+                    story = asyncio.run(select_best_story(
+                        stories=story_candidates,
+                        selection_model=STORY_SELECTION_MODEL
+                    ))
+                    selected_index = -1  # Unknown
+            else:
+                # Use the standard selection method
+                story = asyncio.run(select_best_story(
+                    stories=story_candidates,
+                    selection_model=STORY_SELECTION_MODEL
+                ))
+                selected_index = -1  # Unknown
+
+            # Save candidates and selection to file if requested
+            if save_candidates_file and story_candidates:
+                try:
+                    # Ensure parent directory exists
+                    candidates_dir = os.path.dirname(save_candidates_file)
+                    if candidates_dir:
+                        os.makedirs(candidates_dir, exist_ok=True)
+                    
+                    candidates_data = {
+                        "stories": story_candidates,
+                        "selected_story": story,
+                        "selected_index": selected_index,
+                        "selection_reasons": selection_reasons,
+                        "generation_model": STORY_GENERATION_MODEL,
+                        "selection_model": STORY_SELECTION_MODEL,
+                        "setting": setting,
+                        "primary_tech": primary_tech,
+                        "secondary_theme": secondary_theme,
+                        "num_candidates": len(story_candidates),
+                        "timestamp": timestamp
+                    }
+                    with open(save_candidates_file, 'w') as f:
+                        json.dump(candidates_data, f, indent=2)
+                    logger.info(f"Saved {len(story_candidates)} candidates and selection to {save_candidates_file}")
+                except Exception as e:
+                    logger.error(f"Error saving candidates to file: {e}")
 
             if story is None:
                 logger.error(f"Failed to select a best story using {STORY_SELECTION_MODEL}. Falling back to the first candidate.")
@@ -544,6 +595,8 @@ def main():
                       help='Generate for preview only (no posting)')
     parser.add_argument('--output-dir', type=str,
                       help='Directory to save output files')
+    parser.add_argument('--save-candidates', type=str,
+                      help='Save all candidate stories and selection reasons to specified JSON file')
     
     # Add story-file option for using an existing story
     parser.add_argument('--story-file', type=str,
@@ -621,7 +674,8 @@ def main():
             preview_only=args.preview,
             output_dir=args.output_dir,
             existing_story=existing_story,
-            existing_story_file=args.story_file
+            existing_story_file=args.story_file,
+            save_candidates_file=args.save_candidates
         )
         
         # Save preview if requested
