@@ -597,6 +597,8 @@ def main():
                       help='Directory to save output files')
     parser.add_argument('--save-candidates', type=str,
                       help='Save all candidate stories and selection reasons to specified JSON file')
+    parser.add_argument('--service', action='store_true',
+                      help='Run in service mode (internal use)')
     
     # Add story-file option for using an existing story
     parser.add_argument('--story-file', type=str,
