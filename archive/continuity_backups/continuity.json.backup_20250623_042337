@@ -1,0 +1,15 @@
+{
+  "last_story_id": 0,
+  "characters": [
+    {
+      "name": "Dren",
+      "archetype": "Community Organizer",
+      "backstory": "A native of Valara drawn to the humming nexus called StillPoint, Dren mastered the art of portal magic through years of quiet meditation among the willows and now uses those skills to unite and heal isolated villagers.",
+      "appearance": "Slender figure framed by long, sun-dappled braids, standing amid the verdant whispering willows of Valara.",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": []
+}

@@ -1,0 +1,15 @@
+{
+  "last_story_id": 0,
+  "characters": [
+    {
+      "name": "Maya",
+      "archetype": "Pod Pioneer",
+      "backstory": "Maya trained in environmental science and now volunteers in her neighborhood’s community garden, using smart irrigation technology to support a zero-waste co-op harvest.",
+      "appearance": "Sun-tanned skin, slim build, dressed in sturdy work clothes and gardening gloves with a streak of soil on her forearms",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": []
+}

@@ -11,6 +11,7 @@ import logging
 import json
 import yaml
 import tempfile
+import re
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Union, Tuple
 from pathlib import Path
@@ -379,6 +380,304 @@ class TwitterClient:
         except Exception as e:
             logger.error(f"Failed to get tweet {tweet_id}: {str(e)}")
             return None
+    
+    def segment_story_for_thread(self, text: str, max_length: int = 270) -> List[str]:
+        """Segment a long story into tweet-sized chunks for threading.
+        
+        Args:
+            text: The story text to segment
+            max_length: Maximum characters per segment (default 270 to leave room for numbering)
+            
+        Returns:
+            List of text segments suitable for threading
+        """
+        # Clean and normalize the text
+        text = text.strip()
+        if not text:
+            return []
+        
+        # If the text fits in one tweet, return it as-is
+        if len(text) <= max_length:
+            return [text]
+        
+        segments = []
+        remaining_text = text
+        segment_number = 1
+        
+        while remaining_text:
+            # Find the best break point within the character limit
+            if len(remaining_text) <= max_length:
+                # Last segment
+                segments.append(remaining_text.strip())
+                break
+            
+            # Try to break at sentence boundaries first
+            sentence_break = self._find_sentence_break(remaining_text, max_length)
+            if sentence_break:
+                segment = remaining_text[:sentence_break].strip()
+                segments.append(segment)
+                remaining_text = remaining_text[sentence_break:].strip()
+                continue
+            
+            # If no good sentence break, try paragraph breaks
+            paragraph_break = self._find_paragraph_break(remaining_text, max_length)
+            if paragraph_break:
+                segment = remaining_text[:paragraph_break].strip()
+                segments.append(segment)
+                remaining_text = remaining_text[paragraph_break:].strip()
+                continue
+            
+            # If no paragraph break, try clause breaks (commas, semicolons)
+            clause_break = self._find_clause_break(remaining_text, max_length)
+            if clause_break:
+                segment = remaining_text[:clause_break].strip()
+                segments.append(segment)
+                remaining_text = remaining_text[clause_break:].strip()
+                continue
+            
+            # Last resort: break at word boundaries
+            word_break = self._find_word_break(remaining_text, max_length)
+            if word_break:
+                segment = remaining_text[:word_break].strip()
+                segments.append(segment)
+                remaining_text = remaining_text[word_break:].strip()
+            else:
+                # Emergency break - should rarely happen
+                segment = remaining_text[:max_length-3] + "..."
+                segments.append(segment)
+                remaining_text = remaining_text[max_length-3:].strip()
+        
+        # Add thread numbering if more than one segment
+        if len(segments) > 1:
+            numbered_segments = []
+            for i, segment in enumerate(segments, 1):
+                # Add thread numbering (1/3, 2/3, etc.)
+                thread_indicator = f"({i}/{len(segments)})"
+                
+                # Ensure the segment + numbering fits within the limit
+                available_length = max_length - len(thread_indicator) - 1  # -1 for space
+                if len(segment) > available_length:
+                    segment = segment[:available_length-3] + "..."
+                
+                numbered_segments.append(f"{segment} {thread_indicator}")
+            
+            return numbered_segments
+        
+        return segments
+    
+    def _find_sentence_break(self, text: str, max_length: int) -> Optional[int]:
+        """Find the best sentence break point within the character limit.
+        
+        Args:
+            text: Text to search
+            max_length: Maximum characters to consider
+            
+        Returns:
+            Index of the break point, or None if no good break found
+        """
+        # Look for sentence endings within the limit
+        search_text = text[:max_length]
+        
+        # Find all sentence ending patterns
+        sentence_patterns = [
+            r'[.!?]+\s+[A-Z]',  # Period/exclamation/question + space + capital
+            r'[.!?]+\n',        # Period/exclamation/question + newline
+            r'[.!?]+$'          # Period/exclamation/question at end
+        ]
+        
+        best_break = None
+        for pattern in sentence_patterns:
+            matches = list(re.finditer(pattern, search_text))
+            if matches:
+                # Take the last match (closest to the limit)
+                last_match = matches[-1]
+                break_point = last_match.start() + len(last_match.group().rstrip())
+                if break_point > best_break if best_break else 0:
+                    best_break = break_point
+        
+        return best_break
+    
+    def _find_paragraph_break(self, text: str, max_length: int) -> Optional[int]:
+        """Find paragraph break within the character limit.
+        
+        Args:
+            text: Text to search
+            max_length: Maximum characters to consider
+            
+        Returns:
+            Index of the break point, or None if no break found
+        """
+        search_text = text[:max_length]
+        
+        # Look for double newlines (paragraph breaks)
+        paragraph_match = re.search(r'\n\s*\n', search_text)
+        if paragraph_match:
+            return paragraph_match.start()
+        
+        # Look for single newlines
+        newline_matches = [m.start() for m in re.finditer(r'\n', search_text)]
+        if newline_matches:
+            return newline_matches[-1]  # Last newline within limit
+        
+        return None
+    
+    def _find_clause_break(self, text: str, max_length: int) -> Optional[int]:
+        """Find clause break (comma, semicolon) within the character limit.
+        
+        Args:
+            text: Text to search
+            max_length: Maximum characters to consider
+            
+        Returns:
+            Index of the break point, or None if no break found
+        """
+        search_text = text[:max_length]
+        
+        # Look for clause breaks followed by space
+        clause_patterns = [
+            r'[;]\s+',      # Semicolon + space
+            r'[,]\s+(?=\w)', # Comma + space + word (avoid breaking mid-phrase)
+        ]
+        
+        best_break = None
+        for pattern in clause_patterns:
+            matches = list(re.finditer(pattern, search_text))
+            if matches:
+                last_match = matches[-1]
+                break_point = last_match.start() + 1  # Keep the punctuation
+                if break_point > best_break if best_break else 0:
+                    best_break = break_point
+        
+        return best_break
+    
+    def _find_word_break(self, text: str, max_length: int) -> Optional[int]:
+        """Find word boundary break within the character limit.
+        
+        Args:
+            text: Text to search
+            max_length: Maximum characters to consider
+            
+        Returns:
+            Index of the break point, or None if no break found
+        """
+        search_text = text[:max_length]
+        
+        # Find the last space within the limit
+        last_space = search_text.rfind(' ')
+        if last_space > max_length * 0.7:  # Only if it's reasonably close to the limit
+            return last_space
+        
+        return None
+    
+    def post_thread(
+        self, 
+        story_text: str, 
+        image_path: Optional[Union[str, Path]] = None,
+        max_segment_length: int = 270,
+        delay_between_posts: int = 60
+    ) -> List[Dict[str, Any]]:
+        """Post a story as a threaded set of tweets.
+        
+        Args:
+            story_text: The complete story text to thread.
+            image_path: Optional path to a single image to be attached to the first tweet.
+            max_segment_length: Maximum characters per tweet segment.
+            delay_between_posts: Seconds to wait between posts (default: 60 to avoid rate limits).
+            
+        Returns:
+            List of tweet data dictionaries for each posted tweet.
+        """
+        segments = self.segment_story_for_thread(story_text, max_segment_length)
+        
+        if not segments:
+            logger.warning("No segments created from story text")
+            return []
+        
+        # If only one segment, post as a single tweet
+        if len(segments) == 1:
+            logger.info("Story fits in single tweet, posting as regular tweet")
+            media_ids = []
+            if image_path:
+                media_id = self.upload_media(image_path)
+                media_ids = [media_id]
+            
+            tweet_data = self.post_tweet(segments[0], media_ids=media_ids)
+            return [tweet_data]
+        
+        # Post as thread
+        posted_tweets = []
+        reply_to_id = None
+        
+        logger.info(f"Posting story as thread with {len(segments)} segments")
+        
+        for i, segment in enumerate(segments):
+            try:
+                media_ids = []
+                # Only attach the image to the very first tweet of the thread
+                if i == 0 and image_path:
+                    logger.info("Uploading media for the first tweet")
+                    media_id = self.upload_media(image_path)
+                    media_ids = [media_id]
+                
+                logger.info(f"Posting segment {i+1}/{len(segments)}: {len(segment)} chars")
+                
+                # Retry logic for rate limit errors
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        tweet_data = self.post_tweet(
+                            text=segment,
+                            media_ids=media_ids,
+                            reply_to=reply_to_id
+                        )
+                        break  # Success, exit retry loop
+                    except Exception as tweet_error:
+                        if "429" in str(tweet_error) and attempt < max_retries - 1:
+                            wait_time = (attempt + 1) * 15  # 15, 30, 45 seconds
+                            logger.warning(f"Rate limit hit, waiting {wait_time} seconds before retry {attempt + 1}/{max_retries}")
+                            time.sleep(wait_time)
+                        else:
+                            raise tweet_error  # Re-raise if not rate limit or out of retries
+                
+                posted_tweets.append(tweet_data)
+                reply_to_id = tweet_data["id"]
+                
+                if i < len(segments) - 1:
+                    logger.info(f"Waiting {delay_between_posts} seconds before next tweet...")
+                    time.sleep(delay_between_posts)
+                
+            except Exception as e:
+                error_msg = f"Failed to post segment {i+1}: {str(e)}"
+                logger.error(error_msg)
+                raise Exception(f"Thread posting failed at segment {i+1}: {str(e)}")
+        
+        logger.info(f"Successfully posted complete thread with {len(posted_tweets)} tweets")
+        return posted_tweets
+    
+    def validate_story_length(self, text: str, max_words: int = 250) -> Tuple[bool, str]:
+        """Validate that a story meets the length requirements for threading.
+        
+        Args:
+            text: Story text to validate
+            max_words: Maximum allowed words (default: 250)
+            
+        Returns:
+            Tuple of (is_valid, message)
+        """
+        if not text or not text.strip():
+            return False, "Story text is empty"
+        
+        # Count words
+        word_count = len(text.split())
+        if word_count > max_words:
+            return False, f"Story has {word_count} words, maximum is {max_words}"
+        
+        # Check character count for threading feasibility
+        char_count = len(text)
+        if char_count > 280 * 10:  # Arbitrary limit for reasonable threading
+            return False, f"Story is too long for threading ({char_count} characters)"
+        
+        return True, f"Story is valid ({word_count} words, {char_count} characters)"
 
 
 class TwitterTestPost:

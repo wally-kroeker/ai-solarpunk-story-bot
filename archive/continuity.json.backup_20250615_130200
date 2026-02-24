@@ -1,0 +1,15 @@
+{
+  "last_story_id": 0,
+  "characters": [
+    {
+      "name": "Maya",
+      "archetype": "Community Organizer",
+      "backstory": "Maya oversees a solar-powered community garden’s smart irrigation system, ensuring every plant gets precise care. She readies the harvest for tomorrow’s neighborhood co-op, committed to zero-waste food production.",
+      "appearance": "Not described in the story",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": []
+}

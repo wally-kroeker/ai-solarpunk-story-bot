@@ -1,0 +1,30 @@
+world_name: Sky Archipelago
+description: |
+  A world of floating islands connected by solar-powered airships and lush sky gardens.
+technology:
+  - Solar airships
+  - Sky gardens
+  - Weather control drones
+social_structures:
+  - Decentralized communes
+  - Guilds of sky engineers
+character_archetypes:
+  - Skyfarer
+  - Cloud botanist
+  - Weather shaman
+cultures:
+  - Skyfolk
+  - Grounded
+environment:
+  climate: temperate
+  geography: floating islands, cloud forests
+  notable_locations:
+    - Sunspire City
+    - The Hanging Gardens
+themes:
+  - Sustainability
+  - Adventure
+  - Harmony with nature
+history:
+  - The Great Rewilding
+  - The Sky Exodus 

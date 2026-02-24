@@ -1,0 +1,15 @@
+{
+  "last_story_id": 0,
+  "characters": [
+    {
+      "name": "Uma",
+      "archetype": "Pod Pioneer",
+      "backstory": "Uma lives in a neon-lit city where she developed a meditation Pod prototype that uses emotional AI to guide neighbors toward self-understanding. Driven to bridge technology and human emotion, she helps soften skeptics and open new paths of insight.",
+      "appearance": "Ginger curls, kind eyes",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": []
+}

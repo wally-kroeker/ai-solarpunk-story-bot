@@ -1,0 +1,15 @@
+{
+  "last_story_id": 0,
+  "characters": [
+    {
+      "name": "Maya",
+      "archetype": "Community Organizer",
+      "backstory": "Maya grew into sustainable gardening by volunteering at urban farms and mastered smart irrigation to minimize waste; she now leads the community garden project to feed her neighborhood co-op.",
+      "appearance": "Sun-tanned skin, lean build, wearing practical gardening clothes and gloves, with bright, alert eyes and soil-stained hands.",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": []
+}

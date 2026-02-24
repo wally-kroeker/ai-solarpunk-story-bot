@@ -1,0 +1,15 @@
+{
+  "last_story_id": 0,
+  "characters": [
+    {
+      "name": "Jade Li",
+      "archetype": "Pod Pioneer",
+      "backstory": "Jade Li is a Pod Pioneer with the Mindfulness Innovators, traveling to restore sabotaged microgrids using bicycle dynamo power and e-AI guidance to reignite community solidarity under harsh conditions.",
+      "appearance": "A lean, tattooed mystic with sun-weathered skin and intense eyes, dressed in practical, heat-baked gear as she kneels at her microgrid.",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": []
+}

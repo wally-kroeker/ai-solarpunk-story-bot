@@ -1,0 +1,88 @@
+{
+  "last_story_id": 3,
+  "characters": [
+    {
+      "name": "Maya Chen",
+      "archetype": "Pod Pioneer",
+      "backstory": "Former urban planner who helped design the first neighborhood presence pods",
+      "appearance": "Asian-American woman in her 30s with paint-stained overalls and a measuring tape around her neck",
+      "faction": "Community Resilience Networks",
+      "traits": [],
+      "story_appearances": [
+        1
+      ]
+    },
+    {
+      "name": "Test Maya",
+      "archetype": "Pod Pioneer",
+      "backstory": "Test backstory for Maya",
+      "appearance": "Test appearance",
+      "faction": "Community Resilience Networks",
+      "traits": [],
+      "story_appearances": [
+        2
+      ]
+    },
+    {
+      "name": "Random Test Character",
+      "archetype": "Community Organizer",
+      "backstory": "Random test backstory",
+      "appearance": "Random test appearance",
+      "faction": "Community Resilience Networks",
+      "traits": [],
+      "story_appearances": []
+    },
+    {
+      "name": "Integration Test Character",
+      "archetype": "Test Archetype",
+      "backstory": "Test backstory",
+      "appearance": "Test appearance",
+      "faction": "Test Faction",
+      "traits": [],
+      "story_appearances": [
+        3
+      ]
+    },
+    {
+      "name": "Amani Reyes",
+      "archetype": "Community Organizer",
+      "backstory": "Amani has dedicated herself to maintaining her neighborhood’s solar microgrid, using her technical know-how and determined spirit to keep her community powered; when the system was sabotaged, she led the repair effort to restore electricity for her neighbors.",
+      "appearance": "Sunburned curls, wearing a linen vest",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": [
+    {
+      "id": 1,
+      "title": "First Pod Deployment",
+      "summary": "Maya successfully deployed her first community presence pod in downtown Oakland",
+      "era": 0,
+      "characters": [
+        "Maya Chen"
+      ],
+      "timestamp": "2025-06-09T20:50:33.839736"
+    },
+    {
+      "id": 2,
+      "title": "Test Event",
+      "summary": "Test Maya did something important",
+      "era": 0,
+      "characters": [
+        "Test Maya"
+      ],
+      "timestamp": "2025-06-09T21:26:20.456296"
+    },
+    {
+      "id": 3,
+      "title": "Integration Test Event",
+      "summary": "Test event summary",
+      "era": 0,
+      "characters": [
+        "Integration Test Character"
+      ],
+      "timestamp": "2025-06-09T21:26:20.463509"
+    }
+  ]
+}

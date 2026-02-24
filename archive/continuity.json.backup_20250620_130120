@@ -1,0 +1,15 @@
+{
+  "last_story_id": 0,
+  "characters": [
+    {
+      "name": "Maya Green",
+      "archetype": "Community Organizer",
+      "backstory": "Raised in the city with a passion for sustainable living, Maya merged her interest in renewable energy and urban farming by volunteering to run the solar-powered community garden’s smart irrigation system to ensure zero-waste harvests.",
+      "appearance": "Medium-height with a lean, athletic build, sun-kissed skin, dark hair tied back in a practical ponytail, wearing dirt-smudged overalls and work gloves.",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": []
+}

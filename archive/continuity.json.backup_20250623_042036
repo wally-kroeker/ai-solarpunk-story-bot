@@ -1,0 +1,15 @@
+{
+  "last_story_id": 0,
+  "characters": [
+    {
+      "name": "Cam",
+      "archetype": "Community Organizer",
+      "backstory": "Cam grew up in the steam-powered village of Zerathos, where she mastered the art of crystal tuning to align machine rhythms and soothe her community. Through her StillPoint technique, she both mends worn cogs and lifts the spirits of those around her.",
+      "appearance": "Freckled complexion glowing under a leafy canopy as she tunes a crystalline communicator",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": []
+}

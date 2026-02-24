@@ -1,0 +1,15 @@
+{
+  "last_story_id": 0,
+  "characters": [
+    {
+      "name": "Mira",
+      "archetype": "Community Organizer",
+      "backstory": "As the appointed guardian of the StillPoint orb in Elaria, Mira has spent years mastering its harmony rituals, guiding her neighbors through anxiety and forging collective peace.",
+      "appearance": "Sun-drenched, curly hair framing a warm, inviting face; carries a calm, steady presence",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": []
+}

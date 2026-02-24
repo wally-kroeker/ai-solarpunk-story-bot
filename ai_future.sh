@@ -56,6 +56,535 @@ run_generator() {
     eval $cmd
 }
 
+# Function to display available eras for world-building stories
+show_eras() {
+    echo -e "\n${CYAN}===== Available Eras =====${NC}"
+    echo -e "${YELLOW}0)${NC} ${GREEN}Tipping Point${NC}"
+    echo -e "   ${CYAN}Compounded AI disruption, severe climate events, social polarisation.${NC}"
+    echo -e "   ${CYAN}Grassroots mindfulness labs experiment with early Pods.${NC}\n"
+    
+    echo -e "${YELLOW}1)${NC} ${GREEN}Extinction Burst${NC}"
+    echo -e "   ${CYAN}Old patriarchal institutions tighten control; \"scarcity wars\" over data & water.${NC}"
+    echo -e "   ${CYAN}Prototype Pods prove transformative, spreading via open-source blueprints.${NC}\n"
+    
+    # Note for future eras
+    echo -e "${BLUE}More eras will be added as the world-building system expands${NC}"
+}
+
+# Function to list existing characters from the continuity file
+list_characters() {
+    echo -e "\n${CYAN}===== Available Characters =====${NC}"
+    
+    # Check if continuity file exists
+    if [ ! -f "output/continuity.json" ]; then
+        echo -e "${YELLOW}No continuity file found. No characters available yet.${NC}"
+        echo -e "${BLUE}Generate some stories first to create characters!${NC}"
+        return
+    fi
+    
+    # Check if the file is readable and has content
+    if [ ! -s "output/continuity.json" ]; then
+        echo -e "${YELLOW}Continuity file is empty. No characters available yet.${NC}"
+        echo -e "${BLUE}Generate some stories first to create characters!${NC}"
+        return
+    fi
+    
+    # Try to read characters using Python with error handling
+    local char_output
+    char_output=$(uv run python3 -c "
+import json
+import sys
+
+try:
+    with open('output/continuity.json', 'r') as f:
+        data = json.load(f)
+    
+    characters = data.get('characters', [])
+    
+    if not characters:
+        print('EMPTY')
+    else:
+        for i, char in enumerate(characters):
+            name = char.get('name', 'Unknown')
+            archetype = char.get('archetype', 'Unknown')
+            backstory = char.get('backstory', 'No backstory available')
+            appearances = len(char.get('story_appearances', []))
+            
+            print(f'{i+1}|{name}|{archetype}|{backstory}|{appearances}')
+            
+except json.JSONDecodeError:
+    print('ERROR_JSON')
+except Exception as e:
+    print('ERROR_OTHER')
+" 2>/dev/null)
+    
+    # Handle different outcomes
+    case "$char_output" in
+        "EMPTY")
+            echo -e "${YELLOW}No characters found in continuity file.${NC}"
+            echo -e "${BLUE}Generate some stories first to create characters!${NC}"
+            ;;
+        "ERROR_JSON")
+            echo -e "${RED}Error: Continuity file contains invalid JSON.${NC}"
+            echo -e "${BLUE}You may need to regenerate the continuity file.${NC}"
+            ;;
+        "ERROR_OTHER")
+            echo -e "${RED}Error: Could not read continuity file.${NC}"
+            echo -e "${BLUE}Please check file permissions and try again.${NC}"
+            ;;
+        "")
+            echo -e "${RED}Error: Failed to read character data.${NC}"
+            ;;
+        *)
+            # Success - display characters
+            local char_count=0
+            while IFS='|' read -r num name archetype backstory appearances; do
+                if [[ -n "$num" ]]; then
+                    echo -e "${YELLOW}$num)${NC} ${GREEN}$name${NC} ${CYAN}($archetype)${NC}"
+                    echo -e "   ${BLUE}Backstory:${NC} $backstory"
+                    echo -e "   ${BLUE}Appeared in:${NC} $appearances stories\n"
+                    ((char_count++))
+                fi
+            done <<< "$char_output"
+            
+            if [ $char_count -eq 0 ]; then
+                echo -e "${YELLOW}No characters found.${NC}"
+            else
+                echo -e "${BLUE}Total characters available: $char_count${NC}"
+            fi
+            ;;
+    esac
+}
+
+# Function for era selection and story generation with a new character
+era_selection() {
+    clear
+    echo -e "${GREEN}===== New Story Generation =====${NC}"
+    echo -e "${BLUE}Select an era for your new story:${NC}\n"
+    
+    show_eras
+    
+    echo -e "\n${YELLOW}b)${NC} Back to main menu"
+    echo -e "${YELLOW}q)${NC} Quit"
+    
+    read -p "Enter your choice (0-1, b, q): " era_choice
+    
+    case $era_choice in
+        0|1)
+            # Validate era choice
+            if [[ $era_choice =~ ^[0-1]$ ]]; then
+                echo -e "\n${BLUE}Generating new story in era $era_choice...${NC}"
+                
+                # Use the run_generator function with new era parameters
+                local cmd="uv run src/ai_story_tweet_generator.py --era-id $era_choice --features story,image"
+                echo -e "${BLUE}Running command: $cmd${NC}"
+                eval $cmd
+                
+                echo -e "\n${GREEN}Story generation completed!${NC}"
+                read -p "Press Enter to continue..." 
+            else
+                echo -e "${RED}Invalid era selection. Please try again.${NC}"
+                sleep 2
+                era_selection
+                return
+            fi
+            ;;
+        b|B)
+            return
+            ;;
+        q|Q)
+            echo -e "${GREEN}Exiting.${NC}"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Invalid choice. Please try again.${NC}"
+            sleep 2
+            era_selection
+            ;;
+    esac
+}
+
+# Function for character selection and story generation with existing character
+character_selection() {
+    clear
+    echo -e "${GREEN}===== Story with Existing Character =====${NC}"
+    echo -e "${BLUE}Select an existing character for your story:${NC}\n"
+    
+    # Display available characters
+    list_characters
+    
+    # Check if we actually have characters to choose from
+    if [ ! -f "output/continuity.json" ] || [ ! -s "output/continuity.json" ]; then
+        echo -e "\n${YELLOW}No characters available. Generate some stories first!${NC}"
+        read -p "Press Enter to continue..."
+        return
+    fi
+    
+    # Get character count for validation
+    local char_count
+    char_count=$(uv run python3 -c "
+import json
+try:
+    with open('output/continuity.json', 'r') as f:
+        data = json.load(f)
+    print(len(data.get('characters', [])))
+except:
+    print('0')
+" 2>/dev/null)
+    
+    if [ "$char_count" -eq "0" ]; then
+        echo -e "\n${YELLOW}No characters found. Generate some stories first!${NC}"
+        read -p "Press Enter to continue..."
+        return
+    fi
+    
+    echo -e "\n${YELLOW}0)${NC} Back to main menu"
+    echo -e "${YELLOW}b)${NC} Back to main menu"
+    echo -e "${YELLOW}q)${NC} Quit"
+    
+    read -p "Enter character number (1-$char_count, 0/b, q): " char_choice
+    
+    case $char_choice in
+        0|b|B)
+            return
+            ;;
+        q|Q)
+            echo -e "${GREEN}Exiting.${NC}"
+            exit 0
+            ;;
+        [1-9]*)
+            # Validate character choice
+            if [[ $char_choice =~ ^[0-9]+$ ]] && [[ $char_choice -ge 1 ]] && [[ $char_choice -le $char_count ]]; then
+                # Get the character name
+                local char_name
+                char_name=$(uv run python3 -c "
+import json
+try:
+    with open('output/continuity.json', 'r') as f:
+        data = json.load(f)
+    characters = data.get('characters', [])
+    if $((char_choice-1)) < len(characters):
+        print(characters[$((char_choice-1))]['name'])
+    else:
+        print('ERROR')
+except:
+    print('ERROR')
+" 2>/dev/null)
+                
+                if [ "$char_name" = "ERROR" ] || [ -z "$char_name" ]; then
+                    echo -e "${RED}Error getting character information. Please try again.${NC}"
+                    sleep 2
+                    character_selection
+                    return
+                fi
+                
+                # Now select era for this character's story
+                clear
+                echo -e "${GREEN}===== Era Selection for $char_name =====${NC}"
+                echo -e "${BLUE}Select an era for ${GREEN}$char_name${BLUE}'s story:${NC}\n"
+                
+                show_eras
+                
+                echo -e "\n${YELLOW}b)${NC} Back to character selection"
+                echo -e "${YELLOW}q)${NC} Quit"
+                
+                read -p "Enter era choice (0-1, b, q): " era_choice
+                
+                case $era_choice in
+                    0|1)
+                        if [[ $era_choice =~ ^[0-1]$ ]]; then
+                            echo -e "\n${BLUE}Generating story for ${GREEN}$char_name${BLUE} in era $era_choice...${NC}"
+                            
+                            # Generate story with selected character and era
+                            local cmd="uv run src/ai_story_tweet_generator.py --era-id $era_choice --use-existing-character --character-name \"$char_name\" --features story,image"
+                            echo -e "${BLUE}Running command: $cmd${NC}"
+                            eval $cmd
+                            
+                            echo -e "\n${GREEN}Story generation completed!${NC}"
+                            read -p "Press Enter to continue..."
+                        else
+                            echo -e "${RED}Invalid era selection.${NC}"
+                            sleep 2
+                            character_selection
+                        fi
+                        ;;
+                    b|B)
+                        character_selection
+                        return
+                        ;;
+                    q|Q)
+                        echo -e "${GREEN}Exiting.${NC}"
+                        exit 0
+                        ;;
+                    *)
+                        echo -e "${RED}Invalid choice. Please try again.${NC}"
+                        sleep 2
+                        character_selection
+                        ;;
+                esac
+            else
+                echo -e "${RED}Invalid character selection. Please enter a number between 1 and $char_count.${NC}"
+                sleep 2
+                character_selection
+            fi
+            ;;
+        *)
+            echo -e "${RED}Invalid choice. Please try again.${NC}"
+            sleep 2
+            character_selection
+            ;;
+         esac
+}
+
+# Function to view continuity information main menu
+view_continuity() {
+    clear
+    echo -e "${GREEN}===== Continuity Information =====${NC}"
+    echo -e "${BLUE}View the story universe and character development:${NC}\n"
+    
+    echo -e "${YELLOW}1)${NC} View all characters"
+    echo -e "${YELLOW}2)${NC} View story log"
+    echo -e "${YELLOW}3)${NC} View era information"
+    echo -e "${YELLOW}b)${NC} Back to main menu"
+    echo -e "${YELLOW}q)${NC} Quit"
+    
+    read -p "Enter your choice (1-3, b, q): " continuity_choice
+    
+    case $continuity_choice in
+        1)
+            view_characters
+            ;;
+        2)
+            view_story_log
+            ;;
+        3)
+            view_era_info
+            ;;
+        b|B)
+            return
+            ;;
+        q|Q)
+            echo -e "${GREEN}Exiting.${NC}"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Invalid choice. Please try again.${NC}"
+            sleep 2
+            view_continuity
+            ;;
+    esac
+}
+
+# Function to view detailed character information
+view_characters() {
+    clear
+    echo -e "${GREEN}===== Character Details =====${NC}"
+    
+    # Check if continuity file exists
+    if [ ! -f "output/continuity.json" ] || [ ! -s "output/continuity.json" ]; then
+        echo -e "${YELLOW}No continuity file found. Generate some stories first!${NC}"
+        read -p "Press Enter to continue..."
+        view_continuity
+        return
+    fi
+    
+    # Display detailed character information
+    local char_output
+    char_output=$(uv run python3 -c "
+import json
+try:
+    with open('output/continuity.json', 'r') as f:
+        data = json.load(f)
+    
+    characters = data.get('characters', [])
+    
+    if not characters:
+        print('EMPTY')
+    else:
+        for char in characters:
+            name = char.get('name', 'Unknown')
+            archetype = char.get('archetype', 'Unknown')
+            appearance = char.get('appearance', 'No description available')
+            backstory = char.get('backstory', 'No backstory available')
+            faction = char.get('faction', 'Unknown')
+            traits = char.get('traits', [])
+            appearances = len(char.get('story_appearances', []))
+            
+            print(f'NAME:{name}')
+            print(f'ARCHETYPE:{archetype}')
+            print(f'APPEARANCE:{appearance}')
+            print(f'BACKSTORY:{backstory}')
+            print(f'FACTION:{faction}')
+            print(f'TRAITS:{\"|\".join(traits) if traits else \"None\"}')
+            print(f'APPEARANCES:{appearances}')
+            print('---SEPARATOR---')
+            
+except Exception as e:
+    print('ERROR')
+" 2>/dev/null)
+    
+    case "$char_output" in
+        "EMPTY")
+            echo -e "${YELLOW}No characters found. Generate some stories first!${NC}"
+            ;;
+        "ERROR")
+            echo -e "${RED}Error reading character data.${NC}"
+            ;;
+        *)
+            # Parse and display character data
+            echo "$char_output" | while IFS= read -r line; do
+                if [[ $line == NAME:* ]]; then
+                    name="${line#NAME:}"
+                    echo -e "\n${GREEN}━━━ $name ━━━${NC}"
+                elif [[ $line == ARCHETYPE:* ]]; then
+                    archetype="${line#ARCHETYPE:}"
+                    echo -e "${CYAN}Archetype:${NC} $archetype"
+                elif [[ $line == APPEARANCE:* ]]; then
+                    appearance="${line#APPEARANCE:}"
+                    echo -e "${CYAN}Appearance:${NC} $appearance"
+                elif [[ $line == BACKSTORY:* ]]; then
+                    backstory="${line#BACKSTORY:}"
+                    echo -e "${CYAN}Backstory:${NC} $backstory"
+                elif [[ $line == FACTION:* ]]; then
+                    faction="${line#FACTION:}"
+                    echo -e "${CYAN}Faction:${NC} $faction"
+                elif [[ $line == TRAITS:* ]]; then
+                    traits="${line#TRAITS:}"
+                    if [[ "$traits" != "None" ]]; then
+                        traits_formatted=$(echo "$traits" | sed 's/|/, /g')
+                        echo -e "${CYAN}Traits:${NC} $traits_formatted"
+                    else
+                        echo -e "${CYAN}Traits:${NC} None specified"
+                    fi
+                elif [[ $line == APPEARANCES:* ]]; then
+                    appearances="${line#APPEARANCES:}"
+                    echo -e "${CYAN}Story Appearances:${NC} $appearances"
+                elif [[ $line == "---SEPARATOR---" ]]; then
+                    echo ""
+                fi
+            done
+            ;;
+    esac
+    
+    echo -e "\n${BLUE}Press Enter to return to continuity menu...${NC}"
+    read
+    view_continuity
+}
+
+# Function to view story log
+view_story_log() {
+    clear
+    echo -e "${GREEN}===== Story Log =====${NC}"
+    
+    # Check if continuity file exists
+    if [ ! -f "output/continuity.json" ] || [ ! -s "output/continuity.json" ]; then
+        echo -e "${YELLOW}No continuity file found. Generate some stories first!${NC}"
+        read -p "Press Enter to continue..."
+        view_continuity
+        return
+    fi
+    
+    # Display story log
+    local story_output
+    story_output=$(uv run python3 -c "
+import json
+from datetime import datetime
+try:
+    with open('output/continuity.json', 'r') as f:
+        data = json.load(f)
+    
+    story_log = data.get('story_log', [])
+    
+    if not story_log:
+        print('EMPTY')
+    else:
+        for event in story_log:
+            event_id = event.get('id', 'Unknown')
+            title = event.get('title', 'Untitled')
+            summary = event.get('summary', 'No summary available')
+            era = event.get('era', 'Unknown')
+            characters = event.get('characters', [])
+            timestamp = event.get('timestamp', '')
+            
+            print(f'ID:{event_id}')
+            print(f'TITLE:{title}')
+            print(f'SUMMARY:{summary}')
+            print(f'ERA:{era}')
+            print(f'CHARACTERS:{\"||\".join(characters) if characters else \"None\"}')
+            print(f'TIMESTAMP:{timestamp}')
+            print('---SEPARATOR---')
+            
+except Exception as e:
+    print('ERROR')
+" 2>/dev/null)
+    
+    case "$story_output" in
+        "EMPTY")
+            echo -e "${YELLOW}No stories found. Generate some stories first!${NC}"
+            ;;
+        "ERROR")
+            echo -e "${RED}Error reading story log data.${NC}"
+            ;;
+        *)
+            # Parse and display story data
+            echo "$story_output" | while IFS= read -r line; do
+                if [[ $line == ID:* ]]; then
+                    story_id="${line#ID:}"
+                    echo -e "\n${GREEN}━━━ Story #$story_id ━━━${NC}"
+                elif [[ $line == TITLE:* ]]; then
+                    title="${line#TITLE:}"
+                    echo -e "${CYAN}Title:${NC} $title"
+                elif [[ $line == SUMMARY:* ]]; then
+                    summary="${line#SUMMARY:}"
+                    echo -e "${CYAN}Summary:${NC} $summary"
+                elif [[ $line == ERA:* ]]; then
+                    era="${line#ERA:}"
+                    era_name="Unknown"
+                    case $era in
+                        0) era_name="Tipping Point" ;;
+                        1) era_name="Extinction Burst" ;;
+                    esac
+                    echo -e "${CYAN}Era:${NC} $era ($era_name)"
+                elif [[ $line == CHARACTERS:* ]]; then
+                    characters="${line#CHARACTERS:}"
+                    if [[ "$characters" != "None" ]]; then
+                        characters_formatted=$(echo "$characters" | sed 's/||/, /g')
+                        echo -e "${CYAN}Characters:${NC} $characters_formatted"
+                    else
+                        echo -e "${CYAN}Characters:${NC} None"
+                    fi
+                elif [[ $line == TIMESTAMP:* ]]; then
+                    timestamp="${line#TIMESTAMP:}"
+                    echo -e "${CYAN}Created:${NC} $timestamp"
+                elif [[ $line == "---SEPARATOR---" ]]; then
+                    echo ""
+                fi
+            done
+            ;;
+    esac
+    
+    echo -e "\n${BLUE}Press Enter to return to continuity menu...${NC}"
+    read
+    view_continuity
+}
+
+# Function to view era information
+view_era_info() {
+    clear
+    echo -e "${GREEN}===== Era Information =====${NC}"
+    echo -e "${BLUE}Detailed information about the story world eras:${NC}\n"
+    
+    show_eras
+    
+    echo -e "\n${BLUE}These eras form the backbone of the Solarpunk story universe.${NC}"
+    echo -e "${BLUE}Characters and stories are set within these historical periods,${NC}"
+    echo -e "${BLUE}each with distinct technological, social, and environmental contexts.${NC}"
+    
+    echo -e "\n${BLUE}Press Enter to return to continuity menu...${NC}"
+    read
+    view_continuity
+}
+
 # Function to generate and post content
 generate_and_post() {
     echo -e "\n${GREEN}Story Generation and Posting${NC}"
@@ -70,7 +599,7 @@ generate_and_post() {
 
     case $gen_choice in
         1)
-            run_generator "random" "random" "story image post" false
+            run_generator "random" "random" "story,image,post" false
             ;;
         2)
             # Setting selection
@@ -103,7 +632,7 @@ generate_and_post() {
                 style="random"
             fi
             
-            run_generator "$setting" "$style" "story image post" false
+            run_generator "$setting" "$style" "story,image,post" false
             ;;
         3)
             advanced_generation
@@ -165,8 +694,8 @@ advanced_generation() {
     read -p "Enter feature set [3]: " feature_num
     case $feature_num in
         1) features="story" ;;
-        2) features="story image" ;;
-        *) features="story image post" ;;
+        2) features="story,image" ;;
+        *) features="story,image,post" ;;
     esac
 
     # Preview option
@@ -310,7 +839,7 @@ preview_generation() {
 
     # Generate content with output to preview directory
     echo -e "${BLUE}Generating new story and image...${NC}"
-    run_generator "$setting" "$style" "story image" true "--output-dir" "$preview_dir"
+    run_generator "$setting" "$style" "story,image" true "--output-dir" "$preview_dir"
     
     # Find the story and image files in the preview directory
     local story_file=$(find "$preview_dir" -name "story_*.txt" | head -n 1)
@@ -1130,16 +1659,464 @@ show_help() {
     echo -e "Styles: ${CYAN}${STYLES[*]}${NC}"
 }
 
+# Function to handle custom world document input
+custom_world_generation() {
+    clear
+    echo -e "${GREEN}===== Custom World Document Story Generation =====${NC}"
+    echo -e "${BLUE}Create stories from your own world-building documents!${NC}\n"
+    
+    echo -e "${CYAN}This feature allows you to:${NC}"
+    echo -e "• Paste world-building text from your clipboard"
+    echo -e "• Use any format (narrative, bullet points, JSON, etc.)"
+    echo -e "• Generate stories set in your custom world"
+    echo -e "• Build continuity within your custom setting\n"
+    
+    echo -e "${YELLOW}Options:${NC}"
+    echo -e "${YELLOW}1)${NC} Paste world document from clipboard"
+    echo -e "${YELLOW}2)${NC} Load world document from file"
+    echo -e "${YELLOW}3)${NC} View example world documents"
+    echo -e "${YELLOW}b)${NC} Back to main menu"
+    echo -e "${YELLOW}q)${NC} Quit"
+    
+    read -p "Enter your choice (1-3, b, q): " world_choice
+    
+    case $world_choice in
+        1)
+            paste_world_document
+            ;;
+        2)
+            load_world_document_file
+            ;;
+        3)
+            view_example_worlds
+            ;;
+        b|B)
+            return
+            ;;
+        q|Q)
+            echo -e "${GREEN}Exiting.${NC}"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Invalid choice. Please try again.${NC}"
+            sleep 2
+            custom_world_generation
+            ;;
+    esac
+}
+
+# Function to paste world document from clipboard
+paste_world_document() {
+    clear
+    echo -e "${GREEN}===== Paste World Document =====${NC}"
+    echo -e "${BLUE}Paste your world-building document below.${NC}\n"
+    
+    echo -e "${CYAN}Instructions:${NC}"
+    echo -e "• Paste or type your world-building content"
+    echo -e "• Include details about technology, culture, conflicts, etc."
+    echo -e "• Any format is fine (narrative, bullet points, etc.)"
+    echo -e "• Type ${YELLOW}END_DOCUMENT${NC} on a new line when finished"
+    echo -e "• Type ${YELLOW}CANCEL${NC} to abort\n"
+    
+    echo -e "${YELLOW}Start pasting/typing your world document:${NC}"
+    
+    # Create temporary file for world document
+    local temp_world_file=$(mktemp)
+    local line
+    
+    while IFS= read -r line; do
+        if [[ "$line" == "END_DOCUMENT" ]]; then
+            break
+        elif [[ "$line" == "CANCEL" ]]; then
+            echo -e "\n${YELLOW}Operation cancelled.${NC}"
+            rm -f "$temp_world_file"
+            read -p "Press Enter to continue..."
+            custom_world_generation
+            return
+        else
+            echo "$line" >> "$temp_world_file"
+        fi
+    done
+    
+    # Check if we got any content
+    if [ ! -s "$temp_world_file" ]; then
+        echo -e "\n${YELLOW}No content received. Operation cancelled.${NC}"
+        rm -f "$temp_world_file"
+        read -p "Press Enter to continue..."
+        custom_world_generation
+        return
+    fi
+    
+    # Show preview of what was pasted
+    local char_count=$(wc -c < "$temp_world_file")
+    local line_count=$(wc -l < "$temp_world_file")
+    
+    echo -e "\n${GREEN}Document received!${NC}"
+    echo -e "${BLUE}Stats: $line_count lines, $char_count characters${NC}\n"
+    
+    echo -e "${CYAN}Preview (first 10 lines):${NC}"
+    head -n 10 "$temp_world_file" | sed 's/^/  /'
+    if [ "$line_count" -gt 10 ]; then
+        echo -e "  ${BLUE}... (and $((line_count-10)) more lines)${NC}"
+    fi
+    
+    echo -e "\n${YELLOW}Options:${NC}"
+    echo -e "${YELLOW}1)${NC} Generate story from this world"
+    echo -e "${YELLOW}2)${NC} Save document and generate story"
+    echo -e "${YELLOW}3)${NC} Edit document"
+    echo -e "${YELLOW}4)${NC} Cancel"
+    
+    read -p "Enter your choice (1-4): " doc_choice
+    
+    case $doc_choice in
+        1)
+            generate_story_from_world_doc "$temp_world_file" false
+            ;;
+        2)
+            # Save to a permanent location
+            local timestamp=$(date +%Y%m%d_%H%M%S)
+            local saved_file="examples/worlds/custom_world_${timestamp}.txt"
+            cp "$temp_world_file" "$saved_file"
+            echo -e "\n${GREEN}World document saved to: $saved_file${NC}"
+            generate_story_from_world_doc "$temp_world_file" true
+            ;;
+        3)
+            echo -e "\n${BLUE}Re-edit your document:${NC}"
+            echo -e "${CYAN}Current content will be shown. Add/modify as needed.${NC}"
+            echo -e "${CYAN}Type ${YELLOW}END_DOCUMENT${NC} when finished.${NC}\n"
+            
+            # Show current content for editing
+            cat "$temp_world_file"
+            
+            # Clear the file and start fresh
+            > "$temp_world_file"
+            
+            # Read new content
+            while IFS= read -r line; do
+                if [[ "$line" == "END_DOCUMENT" ]]; then
+                    break
+                else
+                    echo "$line" >> "$temp_world_file"
+                fi
+            done
+            
+            paste_world_document  # Recursively call to show options again
+            ;;
+        4)
+            echo -e "\n${YELLOW}Operation cancelled.${NC}"
+            rm -f "$temp_world_file"
+            read -p "Press Enter to continue..."
+            custom_world_generation
+            ;;
+        *)
+            echo -e "\n${RED}Invalid choice.${NC}"
+            sleep 2
+            paste_world_document
+            ;;
+    esac
+}
+
+# Function to load world document from file
+load_world_document_file() {
+    clear
+    echo -e "${GREEN}===== Load World Document from File =====${NC}"
+    echo -e "${BLUE}Specify a file path to load your world document.${NC}\n"
+    
+    echo -e "${CYAN}Supported formats:${NC}"
+    echo -e "• Plain text (.txt)"
+    echo -e "• Markdown (.md)"
+    echo -e "• JSON (.json)"
+    echo -e "• YAML (.yaml, .yml)\n"
+    
+    echo -e "${YELLOW}Available example files:${NC}"
+    if [ -d "examples/worlds" ]; then
+        ls -la examples/worlds/ | grep -E '\.(txt|md|json|yaml|yml)$' | awk '{print "  " $9}' | head -10
+        echo ""
+    fi
+    
+    read -p "Enter file path (or 'b' to go back): " file_path
+    
+    if [[ "$file_path" == "b" || "$file_path" == "B" ]]; then
+        custom_world_generation
+        return
+    fi
+    
+    if [[ ! -f "$file_path" ]]; then
+        echo -e "\n${RED}Error: File not found: $file_path${NC}"
+        read -p "Press Enter to try again..."
+        load_world_document_file
+        return
+    fi
+    
+    # Show file info
+    local file_size=$(stat -c%s "$file_path" 2>/dev/null || echo "unknown")
+    local line_count=$(wc -l < "$file_path")
+    
+    echo -e "\n${GREEN}File found!${NC}"
+    echo -e "${BLUE}File: $file_path${NC}"
+    echo -e "${BLUE}Size: $file_size bytes, $line_count lines${NC}\n"
+    
+    echo -e "${CYAN}Preview (first 10 lines):${NC}"
+    head -n 10 "$file_path" | sed 's/^/  /'
+    if [ "$line_count" -gt 10 ]; then
+        echo -e "  ${BLUE}... (and $((line_count-10)) more lines)${NC}"
+    fi
+    
+    echo -e "\n${YELLOW}Generate story from this world document? (y/n):${NC}"
+    read -p "" use_file
+    
+    if [[ "$use_file" =~ ^[Yy]$ ]]; then
+        generate_story_from_world_doc "$file_path" true
+    else
+        echo -e "${YELLOW}Operation cancelled.${NC}"
+        read -p "Press Enter to continue..."
+        custom_world_generation
+    fi
+}
+
+# Function to generate story from world document
+generate_story_from_world_doc() {
+    local world_file="$1"
+    local is_permanent="${2:-false}"
+    
+    clear
+    echo -e "${GREEN}===== Generate Story from Custom World =====${NC}"
+    echo -e "${BLUE}Using world document: $(basename "$world_file")${NC}\n"
+    
+    echo -e "${CYAN}Story Generation Options:${NC}"
+    echo -e "${YELLOW}1)${NC} Preview only (no posting)"
+    echo -e "${YELLOW}2)${NC} Generate and post to Twitter"
+    echo -e "${YELLOW}3)${NC} Generate with specific era (0 or 1)"
+    echo -e "${YELLOW}b)${NC} Back to world document menu"
+    
+    read -p "Enter your choice (1-3, b): " gen_choice
+    
+    case $gen_choice in
+        1|2)
+            local features="story,image"
+            local preview_mode=true
+            
+            if [ "$gen_choice" == "2" ]; then
+                features="story,image,post"
+                preview_mode=false
+                
+                echo -e "\n${YELLOW}⚠ WARNING: This will post to Twitter!${NC}"
+                read -p "Are you sure? (y/N): " confirm_post
+                if [[ ! "$confirm_post" =~ ^[Yy]$ ]]; then
+                    echo -e "${YELLOW}Switching to preview mode instead.${NC}"
+                    features="story,image"
+                    preview_mode=true
+                fi
+            fi
+            
+            echo -e "\n${BLUE}Generating story from your custom world...${NC}"
+            echo -e "${CYAN}This may take a moment while the AI analyzes your world document.${NC}"
+            
+            # Run the generator with the custom world document
+            local cmd="uv run src/ai_story_tweet_generator.py --world-doc \"$world_file\" --features $features --era-id 0"
+            if [ "$preview_mode" == true ]; then
+                cmd="$cmd --preview"
+            fi
+            
+            echo -e "${BLUE}Running command: $cmd${NC}"
+            eval $cmd
+            
+            local exit_code=$?
+            if [ $exit_code -eq 0 ]; then
+                echo -e "\n${GREEN}✓ Story generation completed successfully!${NC}"
+            else
+                echo -e "\n${RED}✗ Story generation failed.${NC}"
+                echo -e "${YELLOW}This might be due to:${NC}"
+                echo -e "• Invalid world document format"
+                echo -e "• Missing API keys"
+                echo -e "• Network connectivity issues"
+                echo -e "• AI service availability"
+            fi
+            ;;
+        3)
+            echo -e "\n${BLUE}Select era for the story:${NC}"
+            show_eras
+            
+            read -p "Enter era ID (0-1): " era_choice
+            
+            if [[ "$era_choice" =~ ^[0-1]$ ]]; then
+                echo -e "\n${BLUE}Generating story in era $era_choice from your custom world...${NC}"
+                
+                local cmd="uv run src/ai_story_tweet_generator.py --world-doc \"$world_file\" --era-id $era_choice --features story,image --preview"
+                echo -e "${BLUE}Running command: $cmd${NC}"
+                eval $cmd
+                
+                local exit_code=$?
+                if [ $exit_code -eq 0 ]; then
+                    echo -e "\n${GREEN}✓ Story generation completed successfully!${NC}"
+                else
+                    echo -e "\n${RED}✗ Story generation failed.${NC}"
+                fi
+            else
+                echo -e "${RED}Invalid era selection.${NC}"
+            fi
+            ;;
+        b|B)
+            custom_world_generation
+            return
+            ;;
+        *)
+            echo -e "${RED}Invalid choice.${NC}"
+            sleep 2
+            generate_story_from_world_doc "$world_file" "$is_permanent"
+            return
+            ;;
+    esac
+    
+    # Cleanup temporary file if it was temporary
+    if [ "$is_permanent" == false ]; then
+        rm -f "$world_file"
+    fi
+    
+    echo -e "\n${BLUE}Would you like to generate another story? (y/N):${NC}"
+    read -p "" another
+    
+    if [[ "$another" =~ ^[Yy]$ ]]; then
+        custom_world_generation
+    else
+        read -p "Press Enter to return to main menu..."
+    fi
+}
+
+# Function to view example world documents
+view_example_worlds() {
+    clear
+    echo -e "${GREEN}===== Example World Documents =====${NC}"
+    echo -e "${BLUE}Here are some example world documents you can use as templates:${NC}\n"
+    
+    if [ -d "examples/worlds" ]; then
+        echo -e "${CYAN}Available examples:${NC}"
+        local i=1
+        local files=()
+        
+        for file in examples/worlds/*; do
+            if [ -f "$file" ]; then
+                files+=("$file")
+                echo -e "${YELLOW}$i)${NC} $(basename "$file")"
+                ((i++))
+            fi
+        done
+        
+        if [ ${#files[@]} -eq 0 ]; then
+            echo -e "${YELLOW}No example files found.${NC}"
+        else
+            echo -e "\n${YELLOW}v)${NC} View an example file"
+            echo -e "${YELLOW}c)${NC} Copy example to clipboard (requires xclip)"
+            echo -e "${YELLOW}b)${NC} Back to world document menu"
+            
+            read -p "Enter your choice: " example_choice
+            
+            case $example_choice in
+                v|V)
+                    read -p "Enter example number to view (1-${#files[@]}): " file_num
+                    if [[ "$file_num" =~ ^[0-9]+$ ]] && [ "$file_num" -ge 1 ] && [ "$file_num" -le ${#files[@]} ]; then
+                        local selected_file="${files[$((file_num-1))]}"
+                        clear
+                        echo -e "${GREEN}===== $(basename "$selected_file") =====${NC}\n"
+                        cat "$selected_file"
+                        echo -e "\n${BLUE}Press Enter to continue...${NC}"
+                        read
+                        view_example_worlds
+                    else
+                        echo -e "${RED}Invalid file number.${NC}"
+                        sleep 2
+                        view_example_worlds
+                    fi
+                    ;;
+                c|C)
+                    # Check if xclip is available
+                    if command -v xclip >/dev/null 2>&1; then
+                        read -p "Enter example number to copy (1-${#files[@]}): " file_num
+                        if [[ "$file_num" =~ ^[0-9]+$ ]] && [ "$file_num" -ge 1 ] && [ "$file_num" -le ${#files[@]} ]; then
+                            local selected_file="${files[$((file_num-1))]}"
+                            cat "$selected_file" | xclip -selection clipboard
+                            echo -e "${GREEN}✓ $(basename "$selected_file") copied to clipboard!${NC}"
+                            echo -e "${BLUE}You can now paste it when using the 'Paste world document' option.${NC}"
+                            read -p "Press Enter to continue..."
+                            view_example_worlds
+                        else
+                            echo -e "${RED}Invalid file number.${NC}"
+                            sleep 2
+                            view_example_worlds
+                        fi
+                    else
+                        echo -e "${RED}xclip not found. Install it with: sudo apt install xclip${NC}"
+                        read -p "Press Enter to continue..."
+                        view_example_worlds
+                    fi
+                    ;;
+                b|B)
+                    custom_world_generation
+                    ;;
+                *)
+                    echo -e "${RED}Invalid choice.${NC}"
+                    sleep 2
+                    view_example_worlds
+                    ;;
+            esac
+        fi
+    else
+        echo -e "${YELLOW}Examples directory not found.${NC}"
+        echo -e "${BLUE}Creating examples directory and sample files...${NC}"
+        
+        mkdir -p examples/worlds
+        
+        # Create a simple example
+        cat > examples/worlds/simple_example.txt << 'EOF'
+# Neo-Tokyo 2087
+
+A cyberpunk city where nature has been reintroduced through advanced biotechnology.
+
+## Technology
+- Bioluminescent trees that provide street lighting
+- Air-purifying moss walls on buildings
+- Neural-linked urban gardens
+- Symbiotic human-plant interfaces
+
+## Society
+- Tech-druid collectives manage city ecosystems
+- Corporate bio-hackers compete with open-source mycologists
+- Underground seed libraries preserve genetic diversity
+
+## Conflicts
+- Patent wars over living architecture
+- Resistance against commodified nature
+- Generation gap between cyborgs and bio-enhanced humans
+
+## Environment
+The city glows with living light, where skyscrapers are overgrown with engineered vines and the streets are soft with bio-concrete that photosynthesizes.
+EOF
+        
+        echo -e "${GREEN}✓ Created simple_example.txt${NC}"
+        echo -e "${BLUE}You can now view and use this example.${NC}"
+        read -p "Press Enter to continue..."
+        view_example_worlds
+    fi
+}
+
 # Main menu function
 show_menu() {
     echo -e "\n${GREEN}Select an action:${NC}"
-    echo -e "${YELLOW}1)${NC} Generate content"
-    echo -e "${YELLOW}2)${NC} Preview generation"
-    echo -e "${YELLOW}3)${NC} Manage scheduling"
-    echo -e "${YELLOW}4)${NC} View recent activity"
-    echo -e "${YELLOW}5)${NC} Check system status"
-    echo -e "${YELLOW}6)${NC} Cleanup and archive outputs"
-    echo -e "${YELLOW}7)${NC} Clear preview files only"
+    echo -e "${CYAN}== World-Building Stories ==${NC}"
+    echo -e "${YELLOW}1)${NC} Generate new story (new character)"
+    echo -e "${YELLOW}2)${NC} Generate story with existing character"
+    echo -e "${YELLOW}3)${NC} Custom world document stories"
+    echo -e "${YELLOW}4)${NC} View continuity information"
+    echo -e "${CYAN}== Classic Mode ==${NC}"
+    echo -e "${YELLOW}5)${NC} Generate content (original mode)"
+    echo -e "${YELLOW}6)${NC} Preview generation"
+    echo -e "${CYAN}== Management ==${NC}"
+    echo -e "${YELLOW}7)${NC} Manage scheduling"
+    echo -e "${YELLOW}8)${NC} View recent activity"
+    echo -e "${YELLOW}9)${NC} Check system status"
+    echo -e "${YELLOW}a)${NC} Check error handler health"
+    echo -e "${YELLOW}b)${NC} Cleanup and archive outputs"
+    echo -e "${YELLOW}0)${NC} Clear preview files only"
     echo -e "${YELLOW}h)${NC} Show help"
     echo -e "${YELLOW}q)${NC} Quit"
 
@@ -1147,24 +2124,39 @@ show_menu() {
 
     case $choice in
         1)
-            generate_and_post
+            era_selection
             ;;
         2)
-            preview_generation
+            character_selection
             ;;
         3)
-            manage_scheduling
+            custom_world_generation
             ;;
         4)
-            view_recent_activity
+            view_continuity
             ;;
         5)
-            check_system_status
+            generate_and_post
             ;;
         6)
-            cleanup_outputs
+            preview_generation
             ;;
         7)
+            manage_scheduling
+            ;;
+        8)
+            view_recent_activity
+            ;;
+        9)
+            check_system_status
+            ;;
+        a|A)
+            check_error_handler_health
+            ;;
+        b|B)
+            cleanup_outputs
+            ;;
+        0)
             clear_preview_files
             ;;
         h|H)
@@ -1360,6 +2352,127 @@ cleanup_outputs() {
     mkdir -p output/stories output/images output/previews output/preview_files
 }
 
+# Function to check error handler and application health
+check_error_handler_health() {
+    echo -e "\n${GREEN}===== Error Handler Health Check =====${NC}"
+    
+    echo -e "${BLUE}Checking application health and error handling status...${NC}\n"
+    
+    # Run the health check command
+    local health_output
+    health_output=$(uv run python3 -c "
+import sys
+import json
+try:
+    from src.application_error_handler import get_app_health_report
+    from src.error_handler import get_application_health
+    
+    # Get comprehensive health report
+    app_health = get_app_health_report()
+    system_health = get_application_health()
+    
+    print('=== Application Health Report ===')
+    print(f'Debug Mode: {app_health.get(\"debug_mode\", \"Unknown\")}')
+    print(f'Process ID: {app_health.get(\"process_id\", \"Unknown\")}')
+    print(f'Working Directory: {app_health.get(\"working_directory\", \"Unknown\")}')
+    
+    print('\n=== System Health ===')
+    system_status = system_health.get('system_health', {})
+    print(f'Status: {system_status.get(\"status\", \"Unknown\")}')
+    print(f'Uptime Hours: {system_status.get(\"uptime_hours\", 0):.2f}')
+    print(f'Errors (Last Hour): {system_status.get(\"errors_last_hour\", 0)}')
+    print(f'Total Error Types: {system_status.get(\"total_error_types\", 0)}')
+    
+    print('\n=== Performance Metrics ===')
+    perf_metrics = system_status.get('performance_metrics', {})
+    if perf_metrics:
+        for operation, avg_time in perf_metrics.items():
+            print(f'{operation}: {avg_time:.2f}s average')
+    else:
+        print('No performance metrics available yet')
+    
+    print('\n=== Error Statistics ===')
+    error_stats = system_health.get('error_statistics', {})
+    if error_stats:
+        print(f'Total Error Count: {error_stats.get(\"total_errors\", 0)}')
+        print(f'Unique Error Types: {error_stats.get(\"unique_error_types\", 0)}')
+        error_counts = error_stats.get('error_counts_by_type', {})
+        if error_counts:
+            print('Error Breakdown:')
+            for error_type, count in error_counts.items():
+                print(f'  {error_type}: {count}')
+    else:
+        print('No error statistics available yet')
+    
+    print('\n=== Health Check Complete ===')
+    
+except ImportError as e:
+    print(f'Error: Could not import health monitoring modules: {e}')
+    print('The error handler system may not be properly installed.')
+    sys.exit(1)
+except Exception as e:
+    print(f'Error during health check: {e}')
+    sys.exit(1)
+" 2>&1)
+    
+    local exit_code=$?
+    
+    if [ $exit_code -eq 0 ]; then
+        echo "$health_output"
+        echo -e "\n${GREEN}✓ Health check completed successfully${NC}"
+    else
+        echo -e "${RED}✗ Health check failed:${NC}"
+        echo "$health_output"
+        echo -e "\n${YELLOW}This may indicate issues with the error handling system.${NC}"
+    fi
+    
+    # Also check for critical files
+    echo -e "\n${BLUE}Checking critical files...${NC}"
+    
+    local files_ok=true
+    
+    # Check continuity file
+    if [ -f "output/continuity.json" ]; then
+        echo -e "${GREEN}✓${NC} Continuity file exists"
+        
+        # Validate JSON
+        if uv run python3 -c "import json; json.load(open('output/continuity.json'))" 2>/dev/null; then
+            echo -e "${GREEN}✓${NC} Continuity file is valid JSON"
+        else
+            echo -e "${RED}✗${NC} Continuity file has invalid JSON"
+            files_ok=false
+        fi
+    else
+        echo -e "${YELLOW}⚠${NC} Continuity file does not exist (will be created on first story generation)"
+    fi
+    
+    # Check essential directories
+    for dir in "output" "output/images" "output/stories" "output/previews" "logs"; do
+        if [ -d "$dir" ]; then
+            echo -e "${GREEN}✓${NC} Directory $dir exists"
+        else
+            echo -e "${YELLOW}⚠${NC} Directory $dir does not exist (will be created as needed)"
+        fi
+    done
+    
+    # Check log files
+    local log_count=$(find logs -name "*.log" 2>/dev/null | wc -l)
+    if [ "$log_count" -gt 0 ]; then
+        echo -e "${GREEN}✓${NC} Found $log_count log files"
+    else
+        echo -e "${YELLOW}⚠${NC} No log files found"
+    fi
+    
+    if [ "$files_ok" = true ]; then
+        echo -e "\n${GREEN}✓ All critical files and directories are healthy${NC}"
+    else
+        echo -e "\n${RED}✗ Some issues found with critical files${NC}"
+        echo -e "${BLUE}Consider running a story generation to reinitialize missing files${NC}"
+    fi
+    
+    read -p "Press Enter to continue..."
+}
+
 # Main function
 main() {
     show_header
@@ -1370,12 +2483,12 @@ main() {
             "generate")
                 setting=${2:-"random"}
                 style=${3:-"random"}
-                run_generator "$setting" "$style" "story image post" false
+                run_generator "$setting" "$style" "story,image,post" false
                 ;;
             "preview")
                 setting=${2:-"random"}
                 style=${3:-"random"}
-                run_generator "$setting" "$style" "story image" true
+                run_generator "$setting" "$style" "story,image" true
                 ;;
             "status")
                 check_system_status

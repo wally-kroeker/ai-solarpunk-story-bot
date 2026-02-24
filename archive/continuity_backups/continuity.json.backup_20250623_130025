@@ -1,0 +1,15 @@
+{
+  "last_story_id": 0,
+  "characters": [
+    {
+      "name": "Serin",
+      "archetype": "Pod Pioneer",
+      "backstory": "Serin is a pioneering researcher who has just tested a prototype neural-AI integration Pod in a sunlit lab. After experiencing a euphoric oneness guided by e-AI whispers, they’re driven to share and build on that transformative insight.",
+      "appearance": "Tall, with wild silvered hair and bright, alight eyes",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": []
+}

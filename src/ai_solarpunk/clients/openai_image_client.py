@@ -37,33 +37,36 @@ async def generate_image(
     if not api_key:
         raise ValueError("OPENAI_API_KEY must be set in environment or passed explicitly.")
     openai_client = openai.AsyncOpenAI(api_key=api_key)
-    max_retries = 3
-    for attempt in range(1, max_retries + 1):
-        try:
-            logger.info(f"[OpenAI] Sending image prompt to model '{model}': {prompt[:100]}...")
-            response = await openai_client.images.generate(
-                model=model,
-                prompt=prompt,
-                n=1,
-                size="1024x1024",
-                timeout=timeout
-            )
-            image_b64 = response.data[0].b64_json
-            image_bytes = base64.b64decode(image_b64)
-            if save_path is not None:
-                image_path = Path(save_path)
-                image_path.parent.mkdir(parents=True, exist_ok=True)
-            else:
-                output_dir = output_dir or Path("output/images")
-                output_dir.mkdir(parents=True, exist_ok=True)
-                image_path = output_dir / f"openai_image_{model}_{os.getpid()}_{int(asyncio.get_event_loop().time())}.png"
-            with open(image_path, "wb") as f:
-                f.write(image_bytes)
-            logger.info(f"[OpenAI] Image saved to {image_path}")
-            return image_path
-        except Exception as e:
-            logger.warning(f"[OpenAI] Attempt {attempt} failed: {e}")
-            if attempt == max_retries:
-                logger.error(f"[OpenAI] All attempts failed.")
-                raise
-            await asyncio.sleep(2 ** attempt) 
+    try:
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"[OpenAI] Sending image prompt to model '{model}': {prompt[:100]}...")
+                response = await openai_client.images.generate(
+                    model=model,
+                    prompt=prompt,
+                    n=1,
+                    size="1024x1024",
+                    timeout=timeout
+                )
+                image_b64 = response.data[0].b64_json
+                image_bytes = base64.b64decode(image_b64)
+                if save_path is not None:
+                    image_path = Path(save_path)
+                    image_path.parent.mkdir(parents=True, exist_ok=True)
+                else:
+                    output_dir = output_dir or Path("output/images")
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    image_path = output_dir / f"openai_image_{model}_{os.getpid()}_{int(asyncio.get_event_loop().time())}.png"
+                with open(image_path, "wb") as f:
+                    f.write(image_bytes)
+                logger.info(f"[OpenAI] Image saved to {image_path}")
+                return image_path
+            except Exception as e:
+                logger.warning(f"[OpenAI] Attempt {attempt} failed: {e}")
+                if attempt == max_retries:
+                    logger.error(f"[OpenAI] All attempts failed.")
+                    raise
+                await asyncio.sleep(2 ** attempt)
+    finally:
+        await openai_client.close() 

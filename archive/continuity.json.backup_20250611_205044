@@ -1,0 +1,15 @@
+{
+  "last_story_id": 0,
+  "characters": [
+    {
+      "name": "Arlo",
+      "archetype": "Pod Pioneer",
+      "backstory": "As a Pod Pioneer with the Mindfulness Innovators, Arlo learned to blend technical expertise and meditation to revive scorched microgrids. Her steady hands and serene presence have earned her neighbors’ trust—and their celebratory chilled grape tea.",
+      "appearance": "Lean build with soot-streaked overalls and copper straps around her gear, calm, water-like eyes",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": []
+}

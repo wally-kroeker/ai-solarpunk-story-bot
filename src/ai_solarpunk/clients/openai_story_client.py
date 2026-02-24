@@ -11,8 +11,8 @@ import openai
 logger = logging.getLogger(__name__)
 
 # --- Constants ---
-GENERATION_MODEL = "o4-mini"
-SELECTION_MODEL = "o3"
+GENERATION_MODEL = "gpt-4o"  # More reliable model for story generation
+SELECTION_MODEL = "gpt-4o"   # Same model for consistency and reliability
 NUM_CANDIDATES = 10
 
 async def generate_story(
@@ -40,35 +40,38 @@ async def generate_story(
     if not api_key:
         raise ValueError("OPENAI_API_KEY must be set in environment or passed explicitly.")
     openai_client = openai.AsyncOpenAI(api_key=api_key)
-    max_retries = 3
-    for attempt in range(1, max_retries + 1):
-        try:
-            logger.info(f"[OpenAI Story Gen] Sending prompt to model '{model}': {prompt[:100]}...")
-            response = await openai_client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                timeout=timeout
-            )
-            if response and response.choices and response.choices[0].message:
-                story = response.choices[0].message.content.strip() if response.choices[0].message.content else ""
-                logger.info(f"[OpenAI Story Gen] Received story ({len(story)} chars) from model '{model}'")
-                return story
-            else:
-                logger.warning(f"[OpenAI Story Gen] Invalid response structure received from model '{model}'.")
-                raise ValueError(f"Invalid response structure from model '{model}'.")
-        except openai.APIConnectionError as e:
-            logger.error(f"[OpenAI Story Gen] Connection error on attempt {attempt}: {e}")
-        except openai.RateLimitError as e:
-            logger.warning(f"[OpenAI Story Gen] Rate limit exceeded on attempt {attempt}: {e}")
-        except openai.APIStatusError as e:
-            logger.error(f"[OpenAI Story Gen] API status error on attempt {attempt}: {e.status_code} - {e.response}")
-        except Exception as e:
-            logger.warning(f"[OpenAI Story Gen] Attempt {attempt} failed with model '{model}': {e}")
-        if attempt == max_retries:
-            logger.error(f"[OpenAI Story Gen] All {max_retries} attempts failed with model '{model}'.")
-            raise Exception(f"Failed to generate story with {model} after {max_retries} attempts.")
-        await asyncio.sleep(2 ** attempt)
-    return ""
+    try:
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"[OpenAI Story Gen] Sending prompt to model '{model}': {prompt[:100]}...")
+                response = await openai_client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    timeout=timeout
+                )
+                if response and response.choices and response.choices[0].message:
+                    story = response.choices[0].message.content.strip() if response.choices[0].message.content else ""
+                    logger.info(f"[OpenAI Story Gen] Received story ({len(story)} chars) from model '{model}'")
+                    return story
+                else:
+                    logger.warning(f"[OpenAI Story Gen] Invalid response structure received from model '{model}'.")
+                    raise ValueError(f"Invalid response structure from model '{model}'.")
+            except openai.APIConnectionError as e:
+                logger.error(f"[OpenAI Story Gen] Connection error on attempt {attempt}: {e}")
+            except openai.RateLimitError as e:
+                logger.warning(f"[OpenAI Story Gen] Rate limit exceeded on attempt {attempt}: {e}")
+            except openai.APIStatusError as e:
+                logger.error(f"[OpenAI Story Gen] API status error on attempt {attempt}: {e.status_code} - {e.response}")
+            except Exception as e:
+                logger.warning(f"[OpenAI Story Gen] Attempt {attempt} failed with model '{model}': {e}")
+            if attempt == max_retries:
+                logger.error(f"[OpenAI Story Gen] All {max_retries} attempts failed with model '{model}'.")
+                raise Exception(f"Failed to generate story with {model} after {max_retries} attempts.")
+            await asyncio.sleep(2 ** attempt)
+        return ""
+    finally:
+        await openai_client.close()
 
 async def generate_story_candidates(
     prompt: str,
@@ -149,44 +152,47 @@ async def select_best_story(
         raise ValueError("OPENAI_API_KEY must be set in environment or passed explicitly.")
 
     openai_client = openai.AsyncOpenAI(api_key=api_key)
-    max_retries = 3
-    for attempt in range(1, max_retries + 1):
-        try:
-            logger.info(f"[OpenAI Story Select] Sending {len(stories)} candidates to model '{selection_model}' for review...")
-            response = await openai_client.chat.completions.create(
-                model=selection_model,
-                messages=[{"role": "user", "content": selection_prompt}],
-                timeout=timeout
-            )
+    try:
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"[OpenAI Story Select] Sending {len(stories)} candidates to model '{selection_model}' for review...")
+                response = await openai_client.chat.completions.create(
+                    model=selection_model,
+                    messages=[{"role": "user", "content": selection_prompt}],
+                    timeout=timeout
+                )
 
-            if response and response.choices and response.choices[0].message:
-                selected_story = response.choices[0].message.content.strip() if response.choices[0].message.content else ""
+                if response and response.choices and response.choices[0].message:
+                    selected_story = response.choices[0].message.content.strip() if response.choices[0].message.content else ""
 
-                if selected_story in stories:
-                    logger.info(f"[OpenAI Story Select] Model '{selection_model}' selected story: {selected_story[:100]}...")
-                    return selected_story
+                    if selected_story in stories:
+                        logger.info(f"[OpenAI Story Select] Model '{selection_model}' selected story: {selected_story[:100]}...")
+                        return selected_story
+                    else:
+                        logger.warning(f"[OpenAI Story Select] Model '{selection_model}' returned text not matching any candidate. Trying to find closest match...")
+                        raise ValueError("Selection response did not match any candidate story.")
                 else:
-                    logger.warning(f"[OpenAI Story Select] Model '{selection_model}' returned text not matching any candidate. Trying to find closest match...")
-                    raise ValueError("Selection response did not match any candidate story.")
-            else:
-                logger.warning(f"[OpenAI Story Select] Invalid response structure received from model '{selection_model}'.")
-                raise ValueError(f"Invalid response structure from model '{selection_model}'.")
+                    logger.warning(f"[OpenAI Story Select] Invalid response structure received from model '{selection_model}'.")
+                    raise ValueError(f"Invalid response structure from model '{selection_model}'.")
 
-        except openai.APIConnectionError as e:
-            logger.error(f"[OpenAI Story Select] Connection error on attempt {attempt}: {e}")
-        except openai.RateLimitError as e:
-            logger.warning(f"[OpenAI Story Select] Rate limit exceeded on attempt {attempt}: {e}")
-        except openai.APIStatusError as e:
-            logger.error(f"[OpenAI Story Select] API status error on attempt {attempt}: {e.status_code} - {e.response}")
-        except Exception as e:
-            logger.warning(f"[OpenAI Story Select] Attempt {attempt} failed with model '{selection_model}': {e}")
+            except openai.APIConnectionError as e:
+                logger.error(f"[OpenAI Story Select] Connection error on attempt {attempt}: {e}")
+            except openai.RateLimitError as e:
+                logger.warning(f"[OpenAI Story Select] Rate limit exceeded on attempt {attempt}: {e}")
+            except openai.APIStatusError as e:
+                logger.error(f"[OpenAI Story Select] API status error on attempt {attempt}: {e.status_code} - {e.response}")
+            except Exception as e:
+                logger.warning(f"[OpenAI Story Select] Attempt {attempt} failed with model '{selection_model}': {e}")
 
-        if attempt == max_retries:
-            logger.error(f"[OpenAI Story Select] All {max_retries} attempts failed with model '{selection_model}'.")
-            return None
-        await asyncio.sleep(2 ** attempt)
+            if attempt == max_retries:
+                logger.error(f"[OpenAI Story Select] All {max_retries} attempts failed with model '{selection_model}'.")
+                return None
+            await asyncio.sleep(2 ** attempt)
 
-    return None
+        return None
+    finally:
+        await openai_client.close()
 
 async def select_best_story_with_reasons(
     stories: List[str],
@@ -233,58 +239,61 @@ async def select_best_story_with_reasons(
         raise ValueError("OPENAI_API_KEY must be set in environment or passed explicitly.")
 
     openai_client = openai.AsyncOpenAI(api_key=api_key)
-    max_retries = 3
-    for attempt in range(1, max_retries + 1):
-        try:
-            logger.info(f"[OpenAI Story Select] Sending {len(stories)} candidates to model '{selection_model}' for review with reasons...")
-            response = await openai_client.chat.completions.create(
-                model=selection_model,
-                messages=[{"role": "user", "content": selection_prompt}],
-                timeout=timeout,
-                response_format={"type": "json_object"}  # Ensure we get a valid JSON response
-            )
+    try:
+        max_retries = 3
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"[OpenAI Story Select] Sending {len(stories)} candidates to model '{selection_model}' for review with reasons...")
+                response = await openai_client.chat.completions.create(
+                    model=selection_model,
+                    messages=[{"role": "user", "content": selection_prompt}],
+                    timeout=timeout,
+                    response_format={"type": "json_object"}  # Ensure we get a valid JSON response
+                )
 
-            if response and response.choices and response.choices[0].message:
-                response_content = response.choices[0].message.content.strip() if response.choices[0].message.content else ""
+                if response and response.choices and response.choices[0].message:
+                    response_content = response.choices[0].message.content.strip() if response.choices[0].message.content else ""
 
-                # Try to parse the JSON response
-                try:
-                    result = json.loads(response_content)
-                    selected_story_number = result.get("selected_story_number", 0)
-                    reasons = result.get("reasons", "No reasons provided")
-                    
-                    # Convert to 0-based index and validate
-                    selected_index = selected_story_number - 1
-                    if 0 <= selected_index < len(stories):
-                        selected_story = stories[selected_index]
-                        logger.info(f"[OpenAI Story Select] Model '{selection_model}' selected story #{selected_story_number}")
-                        return selected_story, reasons, selected_index
-                    else:
-                        logger.warning(f"[OpenAI Story Select] Invalid story number: {selected_story_number}")
-                        raise ValueError(f"Invalid story number: {selected_story_number}")
-                except (json.JSONDecodeError, ValueError) as e:
-                    logger.error(f"[OpenAI Story Select] Error parsing response: {e}")
-                    logger.debug(f"Response content: {response_content}")
-                    raise ValueError(f"Invalid JSON response: {e}")
-            else:
-                logger.warning(f"[OpenAI Story Select] Invalid response structure received from model '{selection_model}'.")
-                raise ValueError(f"Invalid response structure from model '{selection_model}'.")
+                    # Try to parse the JSON response
+                    try:
+                        result = json.loads(response_content)
+                        selected_story_number = result.get("selected_story_number", 0)
+                        reasons = result.get("reasons", "No reasons provided")
+                        
+                        # Convert to 0-based index and validate
+                        selected_index = selected_story_number - 1
+                        if 0 <= selected_index < len(stories):
+                            selected_story = stories[selected_index]
+                            logger.info(f"[OpenAI Story Select] Model '{selection_model}' selected story #{selected_story_number}")
+                            return selected_story, reasons, selected_index
+                        else:
+                            logger.warning(f"[OpenAI Story Select] Invalid story number: {selected_story_number}")
+                            raise ValueError(f"Invalid story number: {selected_story_number}")
+                    except (json.JSONDecodeError, ValueError) as e:
+                        logger.error(f"[OpenAI Story Select] Error parsing response: {e}")
+                        logger.debug(f"Response content: {response_content}")
+                        raise ValueError(f"Invalid JSON response: {e}")
+                else:
+                    logger.warning(f"[OpenAI Story Select] Invalid response structure received from model '{selection_model}'.")
+                    raise ValueError(f"Invalid response structure from model '{selection_model}'.")
 
-        except openai.APIConnectionError as e:
-            logger.error(f"[OpenAI Story Select] Connection error on attempt {attempt}: {e}")
-        except openai.RateLimitError as e:
-            logger.warning(f"[OpenAI Story Select] Rate limit exceeded on attempt {attempt}: {e}")
-        except openai.APIStatusError as e:
-            logger.error(f"[OpenAI Story Select] API status error on attempt {attempt}: {e.status_code} - {e.response}")
-        except Exception as e:
-            logger.warning(f"[OpenAI Story Select] Attempt {attempt} failed with model '{selection_model}': {e}")
+            except openai.APIConnectionError as e:
+                logger.error(f"[OpenAI Story Select] Connection error on attempt {attempt}: {e}")
+            except openai.RateLimitError as e:
+                logger.warning(f"[OpenAI Story Select] Rate limit exceeded on attempt {attempt}: {e}")
+            except openai.APIStatusError as e:
+                logger.error(f"[OpenAI Story Select] API status error on attempt {attempt}: {e.status_code} - {e.response}")
+            except Exception as e:
+                logger.warning(f"[OpenAI Story Select] Attempt {attempt} failed with model '{selection_model}': {e}")
 
-        if attempt == max_retries:
-            logger.error(f"[OpenAI Story Select] All {max_retries} attempts failed with model '{selection_model}'.")
-            return None
-        await asyncio.sleep(2 ** attempt)
+            if attempt == max_retries:
+                logger.error(f"[OpenAI Story Select] All {max_retries} attempts failed with model '{selection_model}'.")
+                return None
+            await asyncio.sleep(2 ** attempt)
 
-    return None
+        return None
+    finally:
+        await openai_client.close()
 
 # Remove the old rating function
 # async def openai_rate_story(prompt: str, model: str = "o3") -> int:

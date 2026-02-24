@@ -1,0 +1,15 @@
+{
+  "last_story_id": 0,
+  "characters": [
+    {
+      "name": "Maya",
+      "archetype": "Community Organizer",
+      "backstory": "Passionate about sustainability, Maya volunteers in the solar-powered community garden, applying her technical skills in smart irrigation to ensure the neighborhood co-op enjoys a zero-waste harvest.",
+      "appearance": "Practical gardening attire—sturdy gloves, sun hat, simple work shirt and jeans, hair tied back for outdoor work",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": []
+}

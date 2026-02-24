@@ -1,0 +1,15 @@
+{
+  "last_story_id": 0,
+  "characters": [
+    {
+      "name": "Community Member",
+      "archetype": "Pod Pioneer",
+      "backstory": "Someone working toward a sustainable future.",
+      "appearance": "A hopeful individual with practical clothing",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": []
+}

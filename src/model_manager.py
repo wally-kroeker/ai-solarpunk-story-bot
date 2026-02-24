@@ -17,6 +17,19 @@ from vertexai.preview.generative_models import GenerativeModel
 from vertexai.preview.generative_models import ModelGardenModel
 from vertexai.preview.vision_models import ImageGenerationModel
 
+# Import centralized error handling
+from src.error_handler import (
+    CentralizedErrorHandler, 
+    handle_errors, 
+    ErrorCategory
+)
+
+# Import safe file operations
+from src.validation import safe_write_json, safe_read_json
+
+# Initialize centralized error handler
+error_handler = CentralizedErrorHandler()
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -28,17 +41,27 @@ MODEL_CONFIG_PATH = CONFIG_DIR / "models.json"
 class ModelManager:
     """Manager for Vertex AI model discovery and selection."""
     
+    @handle_errors(
+        category=ErrorCategory.CRITICAL
+    )
     def __init__(self):
         """Initialize the model manager."""
         os.makedirs(CONFIG_DIR, exist_ok=True)
         self.load_config()
     
+    @handle_errors(
+        category=ErrorCategory.RECOVERABLE
+    )
     def load_config(self) -> None:
         """Load saved model configuration."""
         try:
             if MODEL_CONFIG_PATH.exists():
-                with open(MODEL_CONFIG_PATH, 'r') as f:
-                    self.config = json.load(f)
+                success, data, message = safe_read_json(str(MODEL_CONFIG_PATH))
+                if success and data:
+                    self.config = data
+                else:
+                    logger.warning(f"Failed to read config file: {message}")
+                    raise Exception(message)
             else:
                 # Default configuration
                 self.config = {
@@ -49,6 +72,14 @@ class ModelManager:
                 }
                 self.save_config()
         except Exception as e:
+            error_handler.handle_error(
+                e,
+                context={
+                    "operation": "load_model_config",
+                    "config_path": str(MODEL_CONFIG_PATH)
+                },
+                category=ErrorCategory.RECOVERABLE
+            )
             logger.error(f"Error loading model configuration: {e}")
             # Fall back to defaults
             self.config = {
@@ -58,12 +89,33 @@ class ModelManager:
                 "available_image_models": []
             }
     
+    @handle_errors(
+        category=ErrorCategory.FILE_IO
+    )
     def save_config(self) -> None:
         """Save current model configuration."""
         try:
-            with open(MODEL_CONFIG_PATH, 'w') as f:
-                json.dump(self.config, f, indent=2)
+            success = safe_write_json(
+                data=self.config,
+                file_path=str(MODEL_CONFIG_PATH),
+                backup_enabled=True
+            )
+            if not success:
+                logger.error("Failed to save model configuration using safe_write_json")
+                raise Exception("Failed to save model configuration")
+                
+            logger.info("Model configuration saved successfully")
+                
         except Exception as e:
+            error_handler.handle_error(
+                e,
+                context={
+                    "operation": "save_model_config",
+                    "config_path": str(MODEL_CONFIG_PATH),
+                    "config_data": str(self.config)
+                },
+                category=ErrorCategory.FILE_IO
+            )
             logger.error(f"Error saving model configuration: {e}")
     
     def get_text_model(self) -> str:
@@ -74,16 +126,33 @@ class ModelManager:
         """Get the currently selected image model."""
         return self.config.get("image_model", "imagen-3.0-generate-001")
     
+    @handle_errors(
+        category=ErrorCategory.VALIDATION
+    )
     def set_text_model(self, model_name: str) -> None:
         """Set the text model to use for generation."""
+        if not model_name or not isinstance(model_name, str):
+            raise ValueError("Model name must be a non-empty string")
+            
         self.config["text_model"] = model_name
         self.save_config()
+        logger.info(f"Text model set to: {model_name}")
     
+    @handle_errors(
+        category=ErrorCategory.VALIDATION
+    )
     def set_image_model(self, model_name: str) -> None:
         """Set the image model to use for generation."""
+        if not model_name or not isinstance(model_name, str):
+            raise ValueError("Model name must be a non-empty string")
+            
         self.config["image_model"] = model_name
         self.save_config()
+        logger.info(f"Image model set to: {model_name}")
     
+    @handle_errors(
+        category=ErrorCategory.NETWORK
+    )
     def discover_available_models(self) -> Tuple[List[str], List[str]]:
         """Discover available models from Vertex AI."""
         try:
@@ -97,12 +166,23 @@ class ModelManager:
             self.config["available_image_models"] = image_models
             self.save_config()
             
+            logger.info(f"Discovered {len(text_models)} text models and {len(image_models)} image models")
             return text_models, image_models
         
         except Exception as e:
+            error_handler.handle_error(
+                e,
+                context={
+                    "operation": "discover_models"
+                },
+                category=ErrorCategory.NETWORK
+            )
             logger.error(f"Error discovering models: {e}")
             return [], []
     
+    @handle_errors(
+        category=ErrorCategory.NETWORK
+    )
     def _discover_text_models(self) -> List[str]:
         """Discover available text generation models."""
         # List of known text models - will be replaced with API call
@@ -127,9 +207,19 @@ class ModelManager:
             
             return models
         except Exception as e:
+            error_handler.handle_error(
+                e,
+                context={
+                    "operation": "discover_text_models"
+                },
+                category=ErrorCategory.NETWORK
+            )
             logger.error(f"Error discovering text models: {e}")
             return models  # Return hardcoded list as fallback
     
+    @handle_errors(
+        category=ErrorCategory.NETWORK
+    )
     def _discover_image_models(self) -> List[str]:
         """Discover available image generation models."""
         # List of known image models - will be replaced with API call
@@ -144,6 +234,13 @@ class ModelManager:
             
             return models
         except Exception as e:
+            error_handler.handle_error(
+                e,
+                context={
+                    "operation": "discover_image_models"
+                },
+                category=ErrorCategory.NETWORK
+            )
             logger.error(f"Error discovering image models: {e}")
             return models  # Return hardcoded list as fallback
     
@@ -163,6 +260,9 @@ class ModelManager:
             models = image_models
         return models
 
+@handle_errors(
+    category=ErrorCategory.USER_INPUT
+)
 def main():
     """Command line interface for model management."""
     import sys
@@ -202,13 +302,11 @@ def main():
         # Set text model
         model_name = sys.argv[2]
         manager.set_text_model(model_name)
-        print(f"Text model set to: {model_name}")
     
     elif command == "set-image-model" and len(sys.argv) > 2:
         # Set image model
         model_name = sys.argv[2]
         manager.set_image_model(model_name)
-        print(f"Image model set to: {model_name}")
     
     elif command == "refresh":
         # Refresh model list

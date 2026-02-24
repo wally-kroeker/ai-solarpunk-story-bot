@@ -1,0 +1,15 @@
+{
+  "last_story_id": 0,
+  "characters": [
+    {
+      "name": "Mira Li",
+      "archetype": "Community Organizer",
+      "backstory": "A dedicated community organizer on the solar-bench plaza, Mira Li has long worked to integrate e-AI with the microgrid, using her quiet insight to spark collective hope for a sustainable future.",
+      "appearance": "Auburn hair, calm eyes, poised as she steps into the humming Presence Pod",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": []
+}

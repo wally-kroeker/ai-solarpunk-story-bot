@@ -1,0 +1,15 @@
+{
+  "last_story_id": 0,
+  "characters": [
+    {
+      "name": "Lochlan",
+      "archetype": "Community Organizer",
+      "backstory": "Born and raised in sun-dappled Eldoria, Lochlan mastered energy balancing to build his StillPoint device, using it to dissolve local tensions and foster community harmony.",
+      "appearance": "Teal braids and calming eyes",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": []
+}

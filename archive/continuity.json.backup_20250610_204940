@@ -1,0 +1,15 @@
+{
+  "last_story_id": 0,
+  "characters": [
+    {
+      "name": "Tessa Ramon",
+      "archetype": "Pod Pioneer",
+      "backstory": "Tessa taught herself microgrid repair growing up in a heat-stricken settlement and now dedicates her skills to keeping her community powered and safe despite sabotage.",
+      "appearance": "Braided curls, bronze skin, sharp grin",
+      "faction": null,
+      "traits": [],
+      "story_appearances": []
+    }
+  ],
+  "story_log": []
+}
